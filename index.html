@@ -1193,7 +1193,7 @@ function enter(){if(started)return;started=true;const sp=$('#splash');try{show('
   if(!sp)return;sp.classList.add('on');blip(180,.08);setTimeout(()=>blip(240,.05),260);setTimeout(()=>sp.classList.add('lit'),1150);setTimeout(()=>{sp.classList.add('out');setTimeout(()=>sp.remove(),650)},2500)}
 async function getDL(){let d=null;try{d=window.claude?await window.claude.use('downloads'):null}catch(e){}
   return d||{save:async({filename,data})=>{const b=data instanceof Blob?data:new Blob([data]);const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),8000)}}}
-async function seedLocal(){if(db||lsGet('meta'))return;try{const r=await fetch('datos.json',{cache:'no-store'});if(!r.ok)return;const d=await r.json();for(const k in d)lsSet(k,d[k])}catch(e){}}
+async function seedLocal(){if(db)return;const m0=lsGet('meta');if(m0&&(m0.restaurants||[]).length)return;try{const r=await fetch('datos.json',{cache:'no-store'});if(!r.ok)return;const d=await r.json();for(const k in d)lsSet(k,d[k])}catch(e){}}
 async function boot(){
   const t0=Date.now();bar(12);
   try{db=window.claude?await withTimeout(window.claude.use('db'),5000):null}catch(e){console.warn('db',e);db=null}
