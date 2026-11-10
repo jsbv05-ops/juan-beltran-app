@@ -85,7 +85,7 @@ button{cursor:pointer;border:0;background:none;padding:0}
 .gtitle span{min-width:0;overflow-wrap:anywhere}
 .row{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-block:8px 18px;scrollbar-width:none;scroll-padding-left:max(16px,env(safe-area-inset-left,0px))}
 .row::-webkit-scrollbar{display:none}
-.row::after{content:"";flex:0 0 40vw}
+.row::after{content:"";flex:0 0 max(40vw,calc(100vw - min(58vw,280px) - 60px))}
 .tile{flex:0 0 auto;width:min(58vw,280px);aspect-ratio:1;border-radius:4px;background:var(--panel);box-shadow:var(--shadow);scroll-snap-align:start;position:relative;transition:transform .15s}
 .tile .art{position:absolute;inset:0;border-radius:4px;overflow:hidden;display:grid;place-items:center}
 .tile .art img{width:100%;height:100%;object-fit:cover}
@@ -270,6 +270,9 @@ td .in{padding:6px 8px;border-radius:8px}
 .pill{display:inline-block;padding:5px 11px;border-radius:999px;font-weight:800;font-size:13px;white-space:nowrap}
 .pill.ok{background:#173C32;color:#F3EBDD}.pill.due{background:#B8913A;color:#173C32}.pill.fav{background:#F3EBDD;color:#173C32;box-shadow:inset 0 0 0 1.5px #173C32}
 .rrows{display:flex;flex-direction:column;gap:10px}
+.miss{font-size:12px;font-weight:800;color:#8A5A00;background:#FCEFC7;border-radius:8px;padding:4px 8px;align-self:flex-start}
+.missbox{background:#FCEFC7;color:#5C3D00;border:1.5px solid #E2B53E;border-radius:12px;padding:10px 12px;font-size:13.5px}
+.miss-dot{color:#C98A00;font-weight:800}
 /* tareas */
 .news .hd{border-bottom:4px solid #1F5B45}
 .task{display:flex;align-items:center;gap:12px;background:var(--panel);border-radius:12px;padding:12px;box-shadow:var(--shadow)}
@@ -336,7 +339,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.4</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -476,7 +479,7 @@ let actx=null;
 function blip(f=880,d=.05){if(!S.meta.settings.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.08,actx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+d)}catch(e){}}
 
 /* ---------- datos ---------- */
-const DEF_SET={theme:'system',sound:true,taskDot:true,debtDot:true,error:5,target:65,user:'Juan Beltran'};
+const DEF_SET={oz:true,theme:'system',sound:true,taskDot:true,debtDot:true,error:5,target:65,user:'Juan Beltran'};
 let S={meta:{restaurants:[],settings:{...DEF_SET}},tasks:{items:[]},events:{items:[]},boards:{items:[]},ideas:{items:[]},r:{}};
 let db=null;const timers={};
 const lsGet=k=>{try{const v=localStorage.getItem('jbapp_'+k);return v?JSON.parse(v):null}catch(e){return null}};
@@ -492,6 +495,7 @@ const saveMeta=()=>save('meta',S.meta);
 const saveR=id=>save('r_'+id,S.r[id]);
 function fixR(d){
   const R=Object.assign({ingredients:[],recipes:[],categories:[],compras:[],sales:[],ledger:[],settings:{error:S.meta.settings.error,target:S.meta.settings.target}},d||{});
+  if(R.settings.opex==null)R.settings.opex=0;
   // migración: categorías que antes eran texto
   R.recipes.forEach(r=>{if(r.category&&!r.cat){let c=R.categories.find(x=>norm(x.name)===norm(r.category));if(!c){c={id:uid(),name:r.category};R.categories.push(c)}r.cat=c.id}delete r.category});
   // compras viejas con precio/unidad
@@ -537,9 +541,10 @@ function renderHome(){
   requestAnimationFrame(()=>{const t=sh.querySelector(`[data-i="${selIdx}"]`);if(t)sh.scrollTo({left:t.offsetLeft-sh.offsetLeft-parseFloat(getComputedStyle(sh).paddingLeft),behavior:'instant'})});
 }
 function paintTitle(){const r=S.meta.restaurants[selIdx];$('#gtitle').innerHTML=r?`<span class="ic cardic">${IC.cardS}</span><span>${esc(r.name)}</span>`:''}
-function select(i,scroll){selIdx=i;$$('#shelf .tile').forEach((t,k)=>t.classList.toggle('sel',k===i));paintTitle();blip(820,.035);if(scroll){const sh=$('#shelf'),t=sh.querySelector(`[data-i="${i}"]`);sh.scrollTo({left:t.offsetLeft-sh.offsetLeft-parseFloat(getComputedStyle(sh).paddingLeft),behavior:'smooth'})}}
+let progScroll=0;
+function select(i,scroll){selIdx=i;if(scroll)progScroll=Date.now();$$('#shelf .tile').forEach((t,k)=>t.classList.toggle('sel',k===i));paintTitle();blip(820,.035);if(scroll){const sh=$('#shelf'),t=sh.querySelector(`[data-i="${i}"]`);sh.scrollTo({left:t.offsetLeft-sh.offsetLeft-parseFloat(getComputedStyle(sh).paddingLeft),behavior:'smooth'})}}
 // deslizar = seleccionar
-let scrollT;$('#shelf').addEventListener('scroll',()=>{clearTimeout(scrollT);scrollT=setTimeout(()=>{const sh=$('#shelf');const pl=parseFloat(getComputedStyle(sh).paddingLeft);let best=0,bd=1e9;sh.querySelectorAll('.tile').forEach((t,k)=>{const d=Math.abs(t.offsetLeft-sh.offsetLeft-pl-sh.scrollLeft);if(d<bd){bd=d;best=k}});if(best!==selIdx)select(best,false)},90)});
+let scrollT;$('#shelf').addEventListener('scroll',()=>{clearTimeout(scrollT);scrollT=setTimeout(()=>{if(Date.now()-progScroll<900)return;const sh=$('#shelf');const pl=parseFloat(getComputedStyle(sh).paddingLeft);let best=0,bd=1e9;sh.querySelectorAll('.tile').forEach((t,k)=>{const d=Math.abs(t.offsetLeft-sh.offsetLeft-pl-sh.scrollLeft);if(d<bd){bd=d;best=k}});if(best!==selIdx)select(best,false)},90)});
 $('#topIdea').onclick=()=>openSection('ideas');
 async function openSection(id){
   if(id==='newcard')return openCard();
@@ -576,10 +581,14 @@ function calc(rec,R){
   const lines=(rec.items||[]).map(it=>{const ing=ings[it.ing];const uc=ing?unitCost(ing):0;return{it,ing,uc,cost:uc*nd(it.qty)}});
   const base=lines.reduce((a,l)=>a+l.cost,0);const err=nd(rec.error??R.settings.error)/100;const total=base*(1+err);
   const portions=Math.max(nd(rec.portions)||1,1);const per=total/portions;const price=nd(rec.price);
-  const margin=price>0?(price-per)/price:0;const foodCost=price>0?per/price:0;const contrib=price-per;const target=nd(rec.target??R.settings.target)/100;
+  const target=nd(rec.target??R.settings.target)/100;const opex=nd(rec.opex??R.settings.opex??0)/100;const opexAmt=price*opex;
+  const gross=price-per;const net=gross-opexAmt;const margin=price>0?net/price:0;const grossMargin=price>0?gross/price:0;const foodCost=price>0?per/price:0;
   lines.forEach(l=>l.share=base>0?l.cost/base:0);
-  return{lines,base,err,total,portions,perPortion:per,price,margin,foodCost,contrib,contribTotal:contrib*portions,target,suggested:target<1?per/(1-target):0};
+  const missing=lines.filter(l=>!l.ing||!(nd(l.ing.price)>0)).map(l=>l.ing?.name||'Ingrediente eliminado');
+  const den=1-target-opex;
+  return{lines,base,err,total,portions,perPortion:per,price,margin,grossMargin,foodCost,opex,opexAmt,net,netTotal:net*portions,contrib:opexAmt,contribTotal:opexAmt*portions,target,suggested:den>0?per/den:0,missing};
 }
+const OZ=30;const isOz=ing=>ing&&ing.unit==='ml'&&S.meta.settings.oz!==false;const qShow=(ing,q)=>isOz(ing)?+(nd(q)/OZ).toFixed(2):nd(q);const uShow=ing=>isOz(ing)?'oz':(ing?.unit||'');const ucShow=(ing,uc)=>isOz(ing)?uc*OZ:uc;
 const mchip=(m,t)=>`<span class="chip ${m>=t?'good':m>=t-0.1?'warn':'bad'}">${pct(m)}</span>`;
 const catName=(R,id)=>R.categories.find(c=>c.id===id)?.name||'Sin categoría';
 
@@ -598,7 +607,7 @@ function recipesView(R){
   const q=norm(recQ);const list=R.recipes.filter(r=>(curCat==='all'||(curCat==='none'?!R.categories.some(c=>c.id===r.cat):r.cat===curCat))&&(!q||norm(r.name).includes(q)||norm(catName(R,r.cat)).includes(q)));
   const sum=R.recipes.map(r=>calc(r,R));const avgM=sum.length?sum.reduce((a,c)=>a+c.margin,0)/sum.length:0;
   const groups=curCat==='all'?[...R.categories.map(c=>({c,items:list.filter(r=>r.cat===c.id)})),{c:{id:'none',name:'Sin categoría'},items:list.filter(r=>!R.categories.some(c=>c.id===r.cat))}].filter(g=>g.items.length):[{c:null,items:list}];
-  const card=r=>{const c=calc(r,R);return `<button class="rc" data-open="${r.id}">${r.example?'<span class="ex">Ejemplo</span>':''}<h3>${esc(r.name)}</h3><span class="muted small">${c.portions} porción${c.portions>1?'es':''} · ${r.items.length} ingredientes</span><div class="k3"><div><small>Costo/porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Precio</small><b class="num">${money(c.price)}</b></div><div><small>Margen</small><b>${mchip(c.margin,c.target)}</b></div></div></button>`};
+  const card=r=>{const c=calc(r,R);return `<button class="rc" data-open="${r.id}">${r.example?'<span class="ex">Ejemplo</span>':''}<h3>${esc(r.name)}</h3><span class="muted small">${c.portions} porción${c.portions>1?'es':''} · ${r.items.length} ingredientes</span><div class="k3"><div><small>Costo/porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Precio</small><b class="num">${money(c.price)}</b></div><div><small>Ganancia</small><b>${mchip(c.margin,c.target)}</b></div></div>${c.missing.length?`<span class="miss">⚠ Falta precio de ${c.missing.length} ingrediente${c.missing.length>1?'s':''}</span>`:''}</button>`};
   return `<div class="stack">
   <div class="kpis"><div class="kpi hl"><small>Recetas</small><b class="num">${R.recipes.length}</b></div><div class="kpi"><small>Margen promedio</small><b class="num">${pct(avgM)}</b></div><div class="kpi"><small>Categorías</small><b class="num">${R.categories.length}</b></div><div class="kpi"><small>Materias primas</small><b class="num">${R.ingredients.length}</b></div></div>
   <div class="tabs" style="padding-top:0"><button class="tab" data-cat="all" aria-selected="${curCat==='all'}">Todas</button>${R.categories.map(c=>`<button class="tab" data-cat="${c.id}" aria-selected="${curCat===c.id}">${esc(c.name)}</button>`).join('')}<button class="tab" data-act="cats">✎ Categorías</button></div>
@@ -610,20 +619,22 @@ function recipesView(R){
 function mpView(R){
   return `<div class="stack">
   <div class="rowx"><h2 class="sec">Materia prima</h2><span class="muted small">Costo por unidad = precio ÷ (presentación × rendimiento)</span><span class="sp"></span><button class="btn" data-act="addIng">+ Ingrediente</button></div>
+  ${R.ingredients.filter(i=>!(nd(i.price)>0)).length?`<div class="missbox">⚠ ${R.ingredients.filter(i=>!(nd(i.price)>0)).length} materia(s) prima(s) sin precio: ${R.ingredients.filter(i=>!(nd(i.price)>0)).map(i=>esc(i.name)).join(', ')}</div>`:''}
   <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Unidad</th><th>Presentación</th><th>Precio compra</th><th>Rendimiento %</th><th>Costo/unidad</th><th>En recetas</th><th></th></tr></thead><tbody>
-  ${R.ingredients.map(i=>{const uses=R.recipes.filter(r=>r.items.some(x=>x.ing===i.id)).length;return `<tr data-ing="${i.id}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><select class="in" data-f="unit">${UNITS.map(u=>`<option ${u===i.unit?'selected':''}>${u}</option>`).join('')}</select></td><td><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price}" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
+  ${R.ingredients.map(i=>{const uses=R.recipes.filter(r=>r.items.some(x=>x.ing===i.id)).length;return `<tr data-ing="${i.id}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><select class="in" data-f="unit">${UNITS.map(u=>`<option ${u===i.unit?'selected':''}>${u}</option>`).join('')}</select></td><td><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price||''}" placeholder="⚠ sin precio" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
   </tbody></table></div>${R.ingredients.length?'':'<div class="empty">Agrega tu primer ingrediente con su presentación y precio de compra.</div>'}</div>`;
 }
 function globalView(R){
   return `<div class="stack wrapmax">
   <div class="card stack"><b>Valores por defecto de este restaurante</b><span class="muted small">Aplican a las recetas que no tienen valor propio.</span>
-   <div class="grid2"><div class="field"><label for="gErr">Margen de error %</label><input class="in num" id="gErr" inputmode="decimal" value="${R.settings.error}"></div><div class="field"><label for="gTar">Margen de ganancia objetivo %</label><input class="in num" id="gTar" inputmode="decimal" value="${R.settings.target}"></div></div>
+   <div class="grid2"><div class="field"><label for="gErr">Margen de error %</label><input class="in num" id="gErr" inputmode="decimal" value="${R.settings.error}"></div><div class="field"><label for="gTar">Margen de ganancia objetivo %</label><input class="in num" id="gTar" inputmode="decimal" value="${R.settings.target}"></div><div class="field"><label for="gOpx">Aporte a gastos operativos %</label><input class="in num" id="gOpx" inputmode="decimal" value="${R.settings.opex??0}"></div></div>
+   <span class="muted small">Precio sugerido = costo por porción ÷ (1 − ganancia − gastos operativos).</span>
    <div class="rowx"><button class="btn" data-act="saveDefaults">Guardar valores</button></div></div>
   <div class="card stack"><b>Cambiar todas las recetas a la vez</b>
    <div class="field"><label for="gScope">Aplicar a</label><select class="in" id="gScope"><option value="all">Todas las recetas</option>${R.categories.map(c=>`<option value="${c.id}">Solo ${esc(c.name)}</option>`).join('')}</select></div>
-   <div class="grid2"><div class="field"><label for="gAllErr">Margen de error %</label><input class="in num" id="gAllErr" inputmode="decimal" placeholder="Ej: 5"></div><div class="field"><label for="gAllTar">Margen objetivo %</label><input class="in num" id="gAllTar" inputmode="decimal" placeholder="Ej: 65"></div>
+   <div class="grid2"><div class="field"><label for="gAllErr">Margen de error %</label><input class="in num" id="gAllErr" inputmode="decimal" placeholder="Ej: 5"></div><div class="field"><label for="gAllTar">Margen objetivo %</label><input class="in num" id="gAllTar" inputmode="decimal" placeholder="Ej: 30"></div><div class="field"><label for="gAllOpx">Aporte a gastos operativos %</label><input class="in num" id="gAllOpx" inputmode="decimal" placeholder="Ej: 25"></div>
    <div class="field"><label for="gPrice">Subir o bajar precios de venta %</label><input class="in num" id="gPrice" inputmode="decimal" placeholder="Ej: 8 o -5"></div><div class="field"><label for="gMp">Subir o bajar materia prima %</label><input class="in num" id="gMp" inputmode="decimal" placeholder="Ej: 10"></div></div>
-   <label class="rowx small"><input type="checkbox" id="gSuggest"> Poner el precio sugerido según el margen objetivo</label>
+   <label class="rowx small"><input type="checkbox" id="gSuggest"> Poner el precio sugerido según ganancia y gastos operativos</label>
    <div class="rowx"><button class="btn" data-act="applyAll">Aplicar</button></div></div></div>`;
 }
 function exportView(R){
@@ -642,11 +653,11 @@ function bindRest(R){
   act('addIng',()=>{R.ingredients.push({id:uid(),name:'',unit:'g',pack:1000,price:0,yield:100});saveR(curR.id);renderRest();setTimeout(()=>{const ins=$$('#rBody tr[data-ing] [data-f="name"]');ins[ins.length-1]?.focus()},30)});
   B.querySelectorAll('tr[data-ing]').forEach(tr=>{const ing=R.ingredients.find(i=>i.id===tr.dataset.ing);tr.querySelectorAll('[data-f]').forEach(inp=>{const upd=()=>{const f=inp.dataset.f;ing[f]=f==='price'?pm(inp.value):['pack','yield'].includes(f)?nd(inp.value):inp.value;saveR(curR.id);const uc=tr.querySelector('[data-uc]');if(uc)uc.innerHTML=`<b>${money(unitCost(ing))}</b>/${esc(ing.unit)}`};if(inp.tagName==='SELECT')inp.onchange=upd;else{inp.oninput=upd;inp.onchange=upd}})});
   B.querySelectorAll('[data-del-ing]').forEach(b=>b.onclick=()=>{const id=b.dataset.delIng;const used=R.recipes.filter(r=>r.items.some(x=>x.ing===id));if(used.length&&b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';toast(`Está en ${used.length} receta(s). Toca otra vez para eliminar.`);return}R.ingredients=R.ingredients.filter(i=>i.id!==id);R.recipes.forEach(r=>r.items=r.items.filter(x=>x.ing!==id));saveR(curR.id);renderRest()});
-  act('saveDefaults',()=>{R.settings.error=nd($('#gErr').value);R.settings.target=nd($('#gTar').value);saveR(curR.id);toast('Valores guardados')});
-  act('applyAll',()=>{const sc=$('#gScope').value,e=$('#gAllErr').value,t=$('#gAllTar').value,p=$('#gPrice').value,m=$('#gMp').value,sg=$('#gSuggest').checked;
+  act('saveDefaults',()=>{R.settings.error=nd($('#gErr').value);R.settings.target=nd($('#gTar').value);R.settings.opex=nd($('#gOpx').value);saveR(curR.id);toast('Valores guardados')});
+  act('applyAll',()=>{const sc=$('#gScope').value,e=$('#gAllErr').value,t=$('#gAllTar').value,ox=$('#gAllOpx').value,p=$('#gPrice').value,m=$('#gMp').value,sg=$('#gSuggest').checked;
     if(m!=='')R.ingredients.forEach(i=>i.price=Math.round(nd(i.price)*(1+nd(m)/100)));
-    R.recipes.filter(r=>sc==='all'||r.cat===sc).forEach(r=>{if(e!=='')r.error=nd(e);if(t!=='')r.target=nd(t);if(p!=='')r.price=Math.round(nd(r.price)*(1+nd(p)/100));if(sg)r.price=Math.ceil(calc(r,R).suggested/100)*100});
-    if([e,t,p,m].every(x=>x==='')&&!sg)return toast('No escribiste ningún cambio');saveR(curR.id);toast('Cambios aplicados');renderRest()});
+    R.recipes.filter(r=>sc==='all'||r.cat===sc).forEach(r=>{if(e!=='')r.error=nd(e);if(t!=='')r.target=nd(t);if(ox!=='')r.opex=nd(ox);if(p!=='')r.price=Math.round(nd(r.price)*(1+nd(p)/100));if(sg)r.price=Math.ceil(calc(r,R).suggested/100)*100});
+    if([e,t,ox,p,m].every(x=>x==='')&&!sg)return toast('No escribiste ningún cambio');saveR(curR.id);toast('Cambios aplicados');renderRest()});
   const all=$('#exAll');if(all)all.onchange=()=>B.querySelectorAll('[data-ex]').forEach(x=>x.checked=all.checked);
   act('doExport',()=>{const ids=[...B.querySelectorAll('[data-ex]:checked')].map(x=>x.dataset.ex);if(!ids.length)return toast('Elige al menos una receta');exportRecipes(R,ids)});
 }
@@ -667,31 +678,34 @@ $('#genSheet').onclick=e=>{if(e.target.id==='genSheet'){$('#genSheet').hidden=tr
 /* ---------- receta ---------- */
 let curRec=null;
 function openRecipe(id){curRec=S.r[curR.id].recipes.find(r=>r.id===id);go('recipe');renderRecipe()}
+function missHTML(c){return c.missing.length?`<div class="missbox">⚠ <b>Falta precio:</b> ${[...new Set(c.missing)].map(esc).join(', ')}. El costo de esta receta sale más bajo de lo real hasta que los completes en Materia prima.</div>`:''}
 function renderRecipe(){
   const R=S.r[curR.id],r=curRec,c=calc(r,R);$('#reTitle').textContent=r.name||'Receta';
   $('#reBody').innerHTML=`<div class="stack">
    ${r.example?'<span class="ex">Receta de ejemplo: cámbiala o elimínala</span>':''}
    <div class="grid3"><div class="field span2"><label for="fName">Nombre</label><input class="in" id="fName" value="${esc(r.name)}"></div><div class="field"><label for="fCat">Categoría</label><select class="in" id="fCat"><option value="">Sin categoría</option>${R.categories.map(k=>`<option value="${k.id}" ${k.id===r.cat?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>
-   <div class="field"><label for="fPor">Porciones que rinde</label><input class="in num" id="fPor" inputmode="decimal" value="${r.portions}"></div><div class="field"><label for="fPrice">Precio de venta por porción</label><input class="in num" id="fPrice" inputmode="numeric" value="${r.price}"></div><div class="field"><label for="fErr">Margen de error %</label><input class="in num" id="fErr" inputmode="decimal" value="${r.error??''}" placeholder="${R.settings.error} (general)"></div><div class="field"><label for="fTar">Margen objetivo %</label><input class="in num" id="fTar" inputmode="decimal" value="${r.target??''}" placeholder="${R.settings.target} (general)"></div></div>
+   <div class="field"><label for="fPor">Porciones que rinde</label><input class="in num" id="fPor" inputmode="decimal" value="${r.portions}"></div><div class="field"><label for="fPrice">Precio de venta por porción</label><input class="in num" id="fPrice" inputmode="numeric" value="${r.price}"></div><div class="field"><label for="fErr">Margen de error %</label><input class="in num" id="fErr" inputmode="decimal" value="${r.error??''}" placeholder="${R.settings.error} (general)"></div><div class="field"><label for="fTar">Margen de ganancia %</label><input class="in num" id="fTar" inputmode="decimal" value="${r.target??''}" placeholder="${R.settings.target} (general)"></div><div class="field"><label for="fOpx">Aporte a gastos operativos %</label><input class="in num" id="fOpx" inputmode="decimal" value="${r.opex??''}" placeholder="${R.settings.opex??0} (general)"></div></div>
+   <div id="missBox">${missHTML(c)}</div>
    <div class="kpis">
     <div class="kpi"><small>Costo ingredientes</small><b class="num" data-o="base">${money(c.base)}</b></div><div class="kpi"><small>+ Margen de error (<span data-o="err">${pct(c.err)}</span>)</small><b class="num" data-o="total">${money(c.total)}</b></div>
     <div class="kpi"><small>Costo por porción</small><b class="num" data-o="perPortion">${money(c.perPortion)}</b></div><div class="kpi"><small>Food cost</small><b class="num" data-o="foodCost">${pct(c.foodCost)}</b></div>
-    <div class="kpi hl"><small>Margen de ganancia</small><b class="num" data-o="margin">${pct(c.margin)}</b></div><div class="kpi"><small>Aporte a gastos operativos / porción</small><b class="num" data-o="contrib">${money(c.contrib)}</b></div>
-    <div class="kpi"><small>Aporte por tanda (<span data-o="portions">${c.portions}</span>)</small><b class="num" data-o="contribTotal">${money(c.contribTotal)}</b></div><div class="kpi"><small>Precio sugerido (<span data-o="target">${pct(c.target)}</span>)</small><b class="num" data-o="suggested">${money(c.suggested)}</b> <button class="btn sm ghost" id="useSug" style="margin-top:6px">Usar</button></div></div>
-   <div class="rowx"><h2 class="sec">Ingredientes</h2><span class="sp"></span><select class="in" id="addSel" style="width:auto;max-width:62%"><option value="">+ Añadir de materia prima…</option>${R.ingredients.map(i=>`<option value="${i.id}">${esc(i.name||'(sin nombre)')} · ${money(unitCost(i))}/${i.unit}</option>`).join('')}</select></div>
+    <div class="kpi"><small>Aporte a gastos operativos (<span data-o="opex">${pct(c.opex)}</span>) / porción</small><b class="num" data-o="contrib">${money(c.opexAmt)}</b></div>
+    <div class="kpi"><small>Ganancia / porción</small><b class="num" data-o="net">${money(c.net)}</b></div><div class="kpi hl"><small>Margen de ganancia</small><b class="num" data-o="margin">${pct(c.margin)}</b></div>
+    <div class="kpi"><small>Ganancia por tanda (<span data-o="portions">${c.portions}</span>)</small><b class="num" data-o="netTotal">${money(c.netTotal)}</b></div><div class="kpi"><small>Precio sugerido (ganancia <span data-o="target">${pct(c.target)}</span> + gastos <span data-o="opex">${pct(c.opex)}</span>)</small><b class="num" data-o="suggested">${money(c.suggested)}</b> <button class="btn sm ghost" id="useSug" style="margin-top:6px">Usar</button></div></div>
+   <div class="rowx"><h2 class="sec">Ingredientes</h2><span class="sp"></span><select class="in" id="addSel" style="width:auto;max-width:62%"><option value="">+ Añadir de materia prima…</option>${R.ingredients.map(i=>`<option value="${i.id}">${esc(i.name||'(sin nombre)')} · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}${nd(i.price)>0?'':' · ⚠ sin precio'}</option>`).join('')}</select></div>
    <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo/unidad</th><th>Costo en receta</th><th>% participación</th><th></th></tr></thead><tbody>
-   ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${nd(l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(l.ing?.unit||'')}</td><td class="num">${money(l.uc)}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
+   ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${qShow(l.ing,l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(uShow(l.ing))}</td><td class="num">${money(ucShow(l.ing,l.uc))}${l.ing&&nd(l.ing.price)>0?'':' <span class="miss-dot" title="Sin precio">⚠</span>'}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
    <tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num"><b data-o="base">${money(c.base)}</b></td><td class="num">100%</td><td></td></tr></tbody></table></div>
    <div class="rowx"><button class="btn ghost" id="dupRec">Duplicar receta</button><span class="sp"></span><button class="btn danger" id="delRec">Eliminar receta</button></div></div>`;
   const sv=()=>saveR(curR.id);
   const RB=$('#reBody');const refresh=()=>{const c2=calc(r,R);const set=(k,v)=>RB.querySelectorAll(`[data-o="${k}"]`).forEach(e=>e.textContent=v);
-    ['base','total','perPortion','contrib','contribTotal','suggested'].forEach(k=>set(k,money(c2[k])));['foodCost','margin','err','target'].forEach(k=>set(k,pct(c2[k])));set('portions',c2.portions);
+    ['base','total','perPortion','contrib','net','netTotal','suggested'].forEach(k=>set(k,money(c2[k])));['foodCost','margin','err','target','opex'].forEach(k=>set(k,pct(c2[k])));set('portions',c2.portions);const mb=$('#missBox');if(mb)mb.innerHTML=missHTML(c2);
     c2.lines.forEach((l,k)=>{const q=x=>RB.querySelector(x);const lc=q(`[data-lc="${k}"]`),ls=q(`[data-ls="${k}"]`),lb=q(`[data-lb="${k}"]`);if(lc)lc.textContent=money(l.cost);if(ls)ls.textContent=pct(l.share);if(lb)lb.style.width=(l.share*100).toFixed(1)+'%'})};
   const bind=(id,f,kind='',nullable=false)=>{const el=$(id);const upd=()=>{const v=el.value;r[f]=nullable&&v===''?null:(kind==='money'?pm(v):kind?nd(v):(v||null));sv();refresh();if(f==='name')$('#reTitle').textContent=r.name||'Receta'};if(el.tagName==='SELECT')el.onchange=upd;else{el.oninput=upd;el.onchange=upd}};
-  bind('#fName','name');bind('#fCat','cat');bind('#fPor','portions','n');bind('#fPrice','price','money');bind('#fErr','error','n',true);bind('#fTar','target','n',true);
+  bind('#fName','name');bind('#fCat','cat');bind('#fPor','portions','n');bind('#fPrice','price','money');bind('#fErr','error','n',true);bind('#fTar','target','n',true);bind('#fOpx','opex','n',true);
   $('#useSug').onclick=()=>{r.price=Math.ceil(c.suggested/100)*100;sv();renderRecipe()};
   $('#addSel').onchange=e=>{if(!e.target.value)return;r.items.push({ing:e.target.value,qty:0});sv();renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},30)};
-  $$('[data-q]').forEach(i=>{i.oninput=()=>{r.items[+i.dataset.q].qty=nd(i.value);sv();refresh()};i.onchange=i.oninput});
+  $$('[data-q]').forEach(i=>{i.oninput=()=>{const it=r.items[+i.dataset.q];const ing=R.ingredients.find(x=>x.id===it.ing);it.qty=isOz(ing)?+(nd(i.value)*OZ).toFixed(3):nd(i.value);sv();refresh()};i.onchange=i.oninput});
   $$('[data-rm]').forEach(b=>b.onclick=()=>{r.items.splice(+b.dataset.rm,1);sv();renderRecipe()});
   $('#dupRec').onclick=()=>{const cp=JSON.parse(JSON.stringify(r));cp.id=uid();cp.name=r.name+' (copia)';delete cp.example;R.recipes.push(cp);sv();curRec=cp;renderRecipe();toast('Receta duplicada')};
   $('#delRec').onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Toca otra vez para eliminar';return}R.recipes=R.recipes.filter(x=>x.id!==r.id);sv();back();toast('Receta eliminada')};
@@ -707,12 +721,12 @@ async function saveXlsx(wb,fname){
 const sheetName=(wb,s)=>{let nm=(s||'Hoja').replace(/[\\\/\?\*\[\]:]/g,'').slice(0,28)||'Hoja';let k=2;while(wb.SheetNames.includes(nm))nm=nm.slice(0,25)+' '+k++;return nm};
 function exportRecipes(R,ids){
   if(!window.XLSX)return toast('No cargó el generador de Excel');const wb=XLSX.utils.book_new();const recs=R.recipes.filter(r=>ids.includes(r.id));
-  const sum=[['Receta','Categoría','Porciones','Costo ingredientes','Margen de error %','Costo total','Costo por porción','Precio de venta','Food cost %','Margen de ganancia %','Aporte por porción','Aporte por tanda','Precio sugerido']];
-  recs.forEach(r=>{const c=calc(r,R);sum.push([r.name,catName(R,r.cat),c.portions,Math.round(c.base),c.err*100,Math.round(c.total),Math.round(c.perPortion),c.price,+(c.foodCost*100).toFixed(1),+(c.margin*100).toFixed(1),Math.round(c.contrib),Math.round(c.contribTotal),Math.round(c.suggested)])});
+  const sum=[['Receta','Categoría','Porciones','Costo ingredientes','Margen de error %','Costo total','Costo por porción','Precio de venta','Food cost %','Aporte gastos operativos %','Aporte gastos operativos $','Ganancia por porción','Margen de ganancia %','Precio sugerido','Precios faltantes']];
+  recs.forEach(r=>{const c=calc(r,R);sum.push([r.name,catName(R,r.cat),c.portions,Math.round(c.base),c.err*100,Math.round(c.total),Math.round(c.perPortion),c.price,+(c.foodCost*100).toFixed(1),+(c.opex*100).toFixed(1),Math.round(c.opexAmt),Math.round(c.net),+(c.margin*100).toFixed(1),Math.round(c.suggested),[...new Set(c.missing)].join(', ')])});
   const ws0=XLSX.utils.aoa_to_sheet(sum);ws0['!cols']=sum[0].map((h,i)=>({wch:i?16:28}));XLSX.utils.book_append_sheet(wb,ws0,'Resumen');const used=new Set();
   recs.forEach(r=>{const c=calc(r,R);const rows=[[r.name],['Categoría',catName(R,r.cat)],['Porciones',c.portions],[],['Ingrediente','Cantidad','Unidad','Costo por unidad','Costo en receta','% participación']];
-    c.lines.forEach(l=>{used.add(l.it.ing);rows.push([l.ing?.name||'',nd(l.it.qty),l.ing?.unit||'',+l.uc.toFixed(2),Math.round(l.cost),+(l.share*100).toFixed(1)])});
-    rows.push([],['Costo ingredientes','','','',Math.round(c.base)],['Margen de error %','','','',c.err*100],['Costo total','','','',Math.round(c.total)],['Costo por porción','','','',Math.round(c.perPortion)],['Precio de venta','','','',c.price],['Food cost %','','','',+(c.foodCost*100).toFixed(1)],['Margen de ganancia %','','','',+(c.margin*100).toFixed(1)],['Aporte a gastos operativos por porción','','','',Math.round(c.contrib)],['Precio sugerido','','','',Math.round(c.suggested)]);
+    c.lines.forEach(l=>{used.add(l.it.ing);rows.push([l.ing?.name||'',qShow(l.ing,l.it.qty),uShow(l.ing),+ucShow(l.ing,l.uc).toFixed(2),Math.round(l.cost),+(l.share*100).toFixed(1)])});
+    rows.push([],['Costo ingredientes','','','',Math.round(c.base)],['Margen de error %','','','',c.err*100],['Costo total','','','',Math.round(c.total)],['Costo por porción','','','',Math.round(c.perPortion)],['Precio de venta','','','',c.price],['Food cost %','','','',+(c.foodCost*100).toFixed(1)],['Aporte a gastos operativos %','','','',+(c.opex*100).toFixed(1)],['Aporte a gastos operativos por porción','','','',Math.round(c.opexAmt)],['Ganancia por porción','','','',Math.round(c.net)],['Margen de ganancia %','','','',+(c.margin*100).toFixed(1)],['Precio sugerido','','','',Math.round(c.suggested)]);
     const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:34},{wch:10},{wch:8},{wch:16},{wch:16},{wch:15}];XLSX.utils.book_append_sheet(wb,ws,sheetName(wb,r.name))});
   const mp=[['Ingrediente','Unidad','Presentación','Precio compra','Rendimiento %','Costo por unidad']];R.ingredients.filter(i=>used.has(i.id)).forEach(i=>mp.push([i.name,i.unit,nd(i.pack),nd(i.price),nd(i.yield??100),+unitCost(i).toFixed(2)]));
   const ws2=XLSX.utils.aoa_to_sheet(mp);ws2['!cols']=[{wch:28},{wch:8},{wch:13},{wch:14},{wch:13},{wch:15}];XLSX.utils.book_append_sheet(wb,ws2,'Materia prima');
@@ -1164,15 +1178,18 @@ function renderSettings(){
   const sw=(k,t,d)=>`<div class="setrow"><div class="t"><b>${t}</b><small>${d}</small></div><button class="switch" role="switch" data-sw="${k}" aria-checked="${!!st[k]}" aria-label="${t}"></button></div>`;
   B.innerHTML=`<div class="stack wrapmax">
    <div class="card"><h2 class="sec">Tema</h2><div class="setrow"><div class="t"><b>Apariencia</b><small>Blanco o negro, como la consola</small></div><div class="seg">${[['system','Sistema'],['light','Blanco'],['dark','Negro']].map(([k,v])=>`<button data-th="${k}" aria-pressed="${st.theme===k}">${v}</button>`).join('')}</div></div>
-    ${sw('sound','Sonidos de navegación','Clics suaves al moverte y abrir cosas')}</div>
+    ${sw('sound','Sonidos de navegación','Clics suaves al moverte y abrir cosas')}${sw('oz','Líquidos en onzas','Las cantidades en ml de las recetas se muestran en oz (1 oz = 30 ml)')}</div>
    <div class="card"><h2 class="sec">Notificaciones</h2>${sw('taskDot','Punto en Tareas','Se enciende cuando una tarea es para hoy o está vencida')}${sw('debtDot','Punto en Controles','Se enciende cuando algún restaurante te debe')}</div>
    <div class="card stack"><h2 class="sec">Perfil y valores por defecto</h2><div class="grid3"><div class="field"><label for="stUser">Nombre arriba</label><input class="in" id="stUser" value="${esc(st.user)}"></div><div class="field"><label for="stErr">Margen de error % (nuevos restaurantes)</label><input class="in num" id="stErr" inputmode="decimal" value="${st.error}"></div><div class="field"><label for="stTar">Margen objetivo % (nuevos)</label><input class="in num" id="stTar" inputmode="decimal" value="${st.target}"></div></div></div>
+   ${db?'':`<div class="card stack"><h2 class="sec">Datos publicados</h2><span class="muted small">Vuelve a cargar los restaurantes, recetas y eventos que Claude publicó con la última versión de la app. Reemplaza lo que tienes en este dispositivo.</span><div class="rowx"><button class="btn" id="pubLoad">Cargar datos publicados</button></div><div class="rowx" id="pubConfirm" hidden><span class="small" style="color:var(--bad)">Esto reemplaza todo lo de este dispositivo.</span><span class="sp"></span><button class="btn sm ghost" id="pubNo">Cancelar</button><button class="btn sm danger" id="pubYes">Reemplazar</button></div></div>`}
    <div class="card stack"><h2 class="sec">Copia de seguridad</h2><span class="muted small">Descarga todo (restaurantes, recetas, eventos, controles) en un archivo para guardarlo o pasarlo a la versión 1.0.</span><div class="rowx"><button class="btn" id="bkDown">Descargar copia</button><label class="btn ghost">Restaurar copia<input type="file" id="bkUp" accept=".json" hidden></label></div><div class="rowx" id="bkConfirm" hidden><span class="small" style="color:var(--bad)">Esto reemplaza todo lo que hay ahora.</span><span class="sp"></span><button class="btn sm ghost" id="bkNo">Cancelar</button><button class="btn sm danger" id="bkYes">Reemplazar</button></div></div>
-   <div class="card"><div class="setrow"><div class="t"><b>Versión</b><small>Demo 0.4 · los datos se guardan en tu cuenta de Claude</small></div></div></div></div>`;
+   <div class="card"><div class="setrow"><div class="t"><b>Versión</b><small>Demo 0.6 · los datos se guardan en tu cuenta de Claude</small></div></div></div></div>`;
   B.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{st.theme=b.dataset.th;applyTheme();saveMeta();renderSettings()});
   B.querySelectorAll('[data-sw]').forEach(b=>b.onclick=()=>{st[b.dataset.sw]=!st[b.dataset.sw];saveMeta();blip(900);renderSettings()});
   $('#stUser').onchange=e=>{st.user=e.target.value.trim()||'Juan Beltran';saveMeta()};$('#stErr').onchange=e=>{st.error=nd(e.target.value);saveMeta()};$('#stTar').onchange=e=>{st.target=nd(e.target.value);saveMeta()};
   $('#bkDown').onclick=async()=>{await loadAllR();const data={app:'juan-beltran',version:'0.4',ideas:S.ideas,date:new Date().toISOString(),meta:S.meta,tasks:S.tasks,events:S.events,boards:S.boards,r:S.r};const dl=await getDL();if(!dl)return toast('Las descargas no están disponibles aquí');try{await dl.save({filename:`juan-beltran-copia-${today()}.json`,data:JSON.stringify(data)});toast('Copia descargada')}catch(e){toast('No se descargó')}};
+  const pl=$('#pubLoad');if(pl){pl.onclick=()=>$('#pubConfirm').hidden=false;$('#pubNo').onclick=()=>$('#pubConfirm').hidden=true;
+    $('#pubYes').onclick=async()=>{try{const r=await fetch('datos.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;const d=await r.json();Object.keys(localStorage).filter(k=>k.startsWith('jbapp_')&&!k.startsWith('jbapp_img_')).forEach(k=>localStorage.removeItem(k));for(const k in d)lsSet(k,d[k]);toast('Datos cargados');setTimeout(()=>location.reload(),600)}catch(e){toast('No se pudieron cargar los datos')}}}
   let pending=null;$('#bkUp').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{pending=JSON.parse(await f.text());if(pending.app!=='juan-beltran')throw 0;$('#bkConfirm').hidden=false}catch(x){toast('Ese archivo no es una copia de esta app')}};
   $('#bkNo').onclick=()=>{pending=null;$('#bkConfirm').hidden=true};
   $('#bkYes').onclick=async()=>{const p=pending;S.meta=p.meta;S.tasks=p.tasks;S.events=p.events||{items:[]};S.boards=p.boards||{items:[]};S.ideas=p.ideas||{items:[]};S.r={};for(const id in p.r){S.r[id]=fixR(p.r[id]);await save('r_'+id,S.r[id],true)}await Promise.all([save('meta',S.meta,true),save('tasks',S.tasks,true),save('events',S.events,true),save('boards',S.boards,true)]);applyTheme();toast('Copia restaurada');renderSettings()};
