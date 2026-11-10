@@ -7,7 +7,7 @@ App web instalable (PWA) de Juan Beltran: restaurantes, recetas costeadas, mater
 - `lamp.jpg` – fondo de la pantalla de carga.
 - `manifest.webmanifest`, `icons/` – para instalarla en el celular con ícono propio.
 - `sw.js` – service worker: la app abre sin internet después de la primera vez.
-- Los datos NO van en el repositorio (sería público). Se cargan en cada dispositivo con Configuración → Restaurar copia, usando el archivo juan-beltran-copia-datos.json.
+- `datos.json` – datos iniciales (3 restaurantes con logo, recetas y MP de Toquín y Mirador del Cielo, evento de la cata). Se cargan solos la primera vez que la app abre vacía en un dispositivo. OJO: el repositorio es público, así que este archivo también.
 
 ## Cómo funciona por dentro
 - Sin servidor ni base de datos: es 100% estática. Los datos se guardan en el almacenamiento local del navegador (localStorage) de cada dispositivo.
