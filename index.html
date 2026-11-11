@@ -339,7 +339,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.3</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -355,7 +355,7 @@ td .in{padding:6px 8px;border-radius:8px}
 </section>
 
 <section id="recipe" class="screen" hidden>
-  <div class="hd gut"><button class="back" data-back aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="reTitle">Receta</h1><button class="btn sm ghost" id="reExport">Excel</button></div>
+  <div class="hd gut"><button class="back" data-back aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="reTitle">Receta</h1><button class="btn sm ghost" id="reExport">Exportar</button></div>
   <div class="body gut" id="reBody"></div>
 </section>
 
@@ -725,7 +725,7 @@ function renderRecipe(){
   $('#dupRec').onclick=()=>{const cp=JSON.parse(JSON.stringify(r));cp.id=uid();cp.name=r.name+' (copia)';delete cp.example;R.recipes.push(cp);sv();curRec=cp;renderRecipe();toast('Receta duplicada')};
   $('#delRec').onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Toca otra vez para eliminar';return}R.recipes=R.recipes.filter(x=>x.id!==r.id);sv();back();toast('Receta eliminada')};
 }
-$('#reExport').onclick=()=>exportRecipes(S.r[curR.id],[curRec.id]);
+$('#reExport').onclick=()=>{const P=$('#genPane');P.innerHTML=`<h2>Exportar receta</h2><span class="muted small">Elige el formato.</span><button class="btn" id="reExcel">Excel · costos y cantidades de materia prima</button><button class="btn ghost" id="rePng">PNG · ingredientes y cantidades</button><button class="btn ghost" id="reExportCancel">Cancelar</button>`;$('#genSheet').hidden=false;$('#reExcel').onclick=()=>{$('#genSheet').hidden=true;exportRecipes(S.r[curR.id],[curRec.id])};$('#rePng').onclick=()=>{$('#genSheet').hidden=true;exportRecipePng(S.r[curR.id],curRec)};$('#reExportCancel').onclick=()=>$('#genSheet').hidden=true};
 
 /* ---------- Excel ---------- */
 async function saveXlsx(wb,fname){
@@ -740,12 +740,21 @@ function exportRecipes(R,ids){
   recs.forEach(r=>{const c=calc(r,R);sum.push([r.name,catName(R,r.cat),c.portions,Math.round(c.base),c.err*100,Math.round(c.total),Math.round(c.perPortion),c.price,+(c.foodCost*100).toFixed(1),+(c.opex*100).toFixed(1),Math.round(c.opexAmt),Math.round(c.net),+(c.margin*100).toFixed(1),Math.round(c.suggested),[...new Set(c.missing)].join(', ')])});
   const ws0=XLSX.utils.aoa_to_sheet(sum);ws0['!cols']=sum[0].map((h,i)=>({wch:i?16:28}));XLSX.utils.book_append_sheet(wb,ws0,'Resumen');const used=new Set();
   recs.forEach(r=>{const c=calc(r,R);const rows=[[r.name],['Categoría',catName(R,r.cat)],['Porciones',c.portions],[],['Ingrediente','Cantidad','Unidad','Costo por unidad','Costo en receta','% participación']];
-    c.lines.forEach(l=>{used.add(l.it.ing);rows.push([l.ing?.name||'',qShow(l.ing,l.it.qty),uShow(l.ing),+ucShow(l.ing,l.uc).toFixed(2),Math.round(l.cost),+(l.share*100).toFixed(1)])});
+    c.lines.forEach(l=>{used.add(l.it.ing);rows.push([l.ing?.name||'',nd(l.it.qty),l.ing?.unit||'',+l.uc.toFixed(2),Math.round(l.cost),+(l.share*100).toFixed(1)])});
     rows.push([],['Costo ingredientes','','','',Math.round(c.base)],['Margen de error %','','','',c.err*100],['Costo total','','','',Math.round(c.total)],['Costo por porción','','','',Math.round(c.perPortion)],['Precio de venta','','','',c.price],['Food cost %','','','',+(c.foodCost*100).toFixed(1)],['Aporte a gastos operativos %','','','',+(c.opex*100).toFixed(1)],['Aporte a gastos operativos por porción','','','',Math.round(c.opexAmt)],['Ganancia por porción','','','',Math.round(c.net)],['Margen de ganancia %','','','',+(c.margin*100).toFixed(1)],['Precio sugerido','','','',Math.round(c.suggested)]);
     const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:34},{wch:10},{wch:8},{wch:16},{wch:16},{wch:15}];XLSX.utils.book_append_sheet(wb,ws,sheetName(wb,r.name))});
   const mp=[['Ingrediente','Unidad','Presentación','Precio compra','Rendimiento %','Costo por unidad']];R.ingredients.filter(i=>used.has(i.id)).forEach(i=>mp.push([i.name,i.unit,nd(i.pack),nd(i.price),nd(i.yield??100),+unitCost(i).toFixed(2)]));
   const ws2=XLSX.utils.aoa_to_sheet(mp);ws2['!cols']=[{wch:28},{wch:8},{wch:13},{wch:14},{wch:13},{wch:15}];XLSX.utils.book_append_sheet(wb,ws2,'Materia prima');
   saveXlsx(wb,`${curR.name} - recetas ${today()}.xlsx`);
+}
+async function exportRecipePng(R,r){
+  if(document.fonts?.ready)await document.fonts.ready;
+  const lines=(r.items||[]).map(it=>{const ing=R.ingredients.find(x=>x.id===it.ing);let qty=nd(it.qty),unit=ing?.unit||'';if(unit.toLowerCase()==='ml'){qty=qty/30;unit='oz'}return{name:ing?.name||'Ingrediente eliminado',amount:`${Number(qty.toFixed(2))} ${unit}`.trim()}});
+  const w=1080,pad=80,rowH=92,headH=210,foot=80,h=headH+lines.length*rowH+foot,canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const c=canvas.getContext('2d');
+  c.fillStyle='#F3EBDD';c.fillRect(0,0,w,h);c.fillStyle='#173C32';c.fillRect(0,0,w,18);c.fillStyle='#0E0E0C';c.font='700 52px "M PLUS Rounded 1c",sans-serif';c.fillText(r.name||'Receta',pad,105,{maxWidth:w-pad*2});c.fillStyle='#B8913A';c.fillRect(pad,145,w-pad*2,4);
+  c.font='700 25px "M PLUS Rounded 1c",sans-serif';c.fillStyle='#173C32';c.fillText('INGREDIENTE',pad,194);c.textAlign='right';c.fillText('CANTIDAD',w-pad,194);c.textAlign='left';
+  c.font='500 30px "M PLUS Rounded 1c",sans-serif';c.fillStyle='#0E0E0C';lines.forEach((line,i)=>{const y=headH+i*rowH+48;c.fillText(line.name,pad,y,{maxWidth:w-pad*2-220});c.textAlign='right';c.fillText(line.amount,w-pad,y);c.textAlign='left';c.strokeStyle='rgba(23,60,50,.18)';c.lineWidth=2;c.beginPath();c.moveTo(pad,y+25);c.lineTo(w-pad,y+25);c.stroke()});
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)return toast('No se pudo crear la imagen');const dl=await getDL();if(!dl)return toast('Las descargas no están disponibles aquí');try{const safe=(r.name||'receta').replace(/[\\/:*?"<>|]/g,'');await dl.save({filename:`${safe}.png`,data:blob});toast('Imagen lista')}catch(e){toast(e.code==='declined'?'Descarga cancelada':'No se pudo descargar la imagen')}
 }
 
 /* ---------- tareas ---------- */
@@ -1248,4 +1257,3 @@ boot().catch(e=>{console.error(e);enter()});
 <script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
 </body>
 </html>
-
