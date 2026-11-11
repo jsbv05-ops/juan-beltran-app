@@ -339,7 +339,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.3</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.4</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1235,6 +1235,17 @@ function enter(){if(started)return;started=true;const sp=$('#splash');try{show('
 async function getDL(){let d=null;try{d=window.claude?await window.claude.use('downloads'):null}catch(e){}
   return d||{save:async({filename,data})=>{const b=data instanceof Blob?data:new Blob([data]);const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),8000)}}}
 async function seedLocal(){if(db)return;const m0=lsGet('meta');if(m0&&(m0.restaurants||[]).length)return;try{const r=await fetch('datos.json',{cache:'no-store'});if(!r.ok)return;const d=await r.json();for(const k in d)lsSet(k,d[k])}catch(e){}}
+async function migrateMiradorData(){
+  const card=S.meta.restaurants.find(x=>x.id==='mirador'||norm(x.name).includes('mirador del cielo'));if(!card)return;const R=S.r[card.id];if(!R)return;let changed=false;
+  const setIng=(id,name,pack,price,unit='g',yieldPct=100)=>{let x=R.ingredients.find(i=>i.id===id)||R.ingredients.find(i=>norm(i.name)===norm(name));if(!x){x={id,name,pack,price,unit,yield:yieldPct};R.ingredients.push(x);changed=true;return x}if(x.name!==name||x.pack!==pack||x.price!==price||x.unit!==unit||x.yield!==yieldPct){Object.assign(x,{name,pack,price,unit,yield:yieldPct});changed=true}return x};
+  const berries=setIng('ifdw52oj','Arandanos',125,5900),straw=setIng('ah19arr2','Fresa',480,5600,'g',95),sugar=R.ingredients.find(i=>i.id==='k09jxkuo')||R.ingredients.find(i=>norm(i.name)==='azucar blanca');
+  const jamIng=setIng('axumxp70','Mermelada',695,11833);
+  R.ingredients.filter(i=>norm(i.name)==='sirope').forEach(i=>{i.name='Almíbar';changed=true});
+  let cat=R.categories.find(c=>norm(c.name)==='subrecetas');if(!cat){cat={id:'eidc2guq',name:'Subrecetas'};R.categories.push(cat);changed=true}
+  let rec=R.recipes.find(x=>x.id==='mrmld695'||norm(x.name)==='mermelada');if(!rec){rec={id:'mrmld695',name:'Mermelada',cat:cat.id,items:[],portions:1,price:0,error:null,target:null};R.recipes.push(rec);changed=true}
+  if(sugar&&(!rec.items||!rec.items.length)){rec.items=[{ing:berries.id,qty:125},{ing:straw.id,qty:480},{ing:sugar.id,qty:90}];rec.cat=cat.id;rec.portions=1;changed=true}
+  if(changed)await saveR(card.id,true);
+}
 async function boot(){
   const t0=Date.now();bar(12);
   try{db=window.claude?await withTimeout(window.claude.use('db'),5000):null}catch(e){console.warn('db',e);db=null}
@@ -1245,7 +1256,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
