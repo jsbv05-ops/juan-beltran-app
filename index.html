@@ -357,7 +357,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.8</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.9</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1140,7 +1140,9 @@ function importMap(R,per,rows){
 }
 
 /* ---------- controles: turnos, asesorías y pagos ---------- */
-let ctR=null,ctTy='turno',ctPay='transferencia',ctImg=null,ctSel=[];
+let ctR=null,ctTy='turno',ctPay='transferencia',ctImg=null,ctSel=[],ctPer='dia';
+const fdr=m=>{if(!m.date)return '';if(!m.date2||m.date2===m.date)return fdate(m.date);const a=new Date(m.date+'T12:00'),b=new Date(m.date2+'T12:00');return a.getMonth()===b.getMonth()&&a.getFullYear()===b.getFullYear()?`${a.getDate()} – ${fdate(m.date2)}`:`${fdate(m.date)} – ${fdate(m.date2)}`};
+const nDays=(a,b)=>!a||!b?1:Math.round((new Date(b+'T12:00')-new Date(a+'T12:00'))/864e5)+1;
 const LT={turno:'Turno',ases:'Asesoría',cargo:'Otro cobro',pago:'Pago / abono'};
 const PM={transferencia:'Transferencia',efectivo:'Efectivo'};
 const balance=R=>(R?.ledger||[]).reduce((a,m)=>a+(m.type==='pago'?-nd(m.amount):nd(m.amount)),0);
@@ -1165,21 +1167,22 @@ function renderCtrl(){
   const cobr=L.filter(m=>m.type!=='pago').reduce((a,m)=>a+nd(m.amount),0),pag=L.filter(m=>m.type==='pago').reduce((a,m)=>a+nd(m.amount),0);
   const list=L.map((m,i)=>({m,i})).reverse();
   const isPay=ctTy==='pago';const AL=allocate(L);ctSel=ctSel.filter(id=>AL.left[id]>0.5);
-  const st=m=>{if(m.type==='pago'){const P=AL.pays[m.id];if(!P)return '';const names=P.parts.map(x=>(x.full?'':'Abono a ')+prodName(x.m)+(x.m.date?' '+fdate(x.m.date):''));return names.length||P.extra?`<div class="small muted">Paga: ${esc(names.join(' · '))}${P.extra?`${names.length?' · ':''}saldo a favor ${money(P.extra)}`:''}</div>`:''}
+  const st=m=>{if(m.type==='pago'){const P=AL.pays[m.id];if(!P)return '';const names=P.parts.map(x=>(x.full?'':'Abono a ')+prodName(x.m)+(x.m.date?' '+fdr(x.m):''));return names.length||P.extra?`<div class="small muted">Paga: ${esc(names.join(' · '))}${P.extra?`${names.length?' · ':''}saldo a favor ${money(P.extra)}`:''}</div>`:''}
     const lf=AL.left[m.id]??0,tot=nd(m.amount);return lf<=0.5?'<span class="pill ok">Pagado ✓</span>':lf<tot-0.5?`<span class="pill part">Abonado ${money(tot-lf)} · falta ${money(lf)}</span>`:'<span class="pill due">Pendiente</span>'};
   B.innerHTML=`<div class="stack wrapmax"><div class="rowx"><button class="btn sm ghost" id="ctBack">← Restaurantes</button><span class="sp"></span><button class="btn sm" id="ctBill" style="background:#173C32;color:#F3EBDD">Cuenta de cobro</button></div>
    <div class="kpis"><div class="kpi"><small>Cobrado</small><b class="num">${money(cobr)}</b></div><div class="kpi"><small>Pagado</small><b class="num">${money(pag)}</b></div><div class="kpi hl"><small>Saldo pendiente</small><b class="num">${money(cobr-pag)}</b></div></div>
    <form class="card stack" id="ctForm"><div class="seg segwrap" role="group">${Object.entries(LT).map(([k,v])=>`<button type="button" data-ty="${k}" aria-pressed="${k===ctTy}">${v}</button>`).join('')}</div>
     <div class="grid2">
-     ${ctTy==='ases'?'':`<div class="field"><label for="ctDate">Fecha</label><input class="in" type="date" id="ctDate" value="${today()}"></div>`}
-     <div class="field"><label for="ctAmt">${{turno:'Valor del turno',ases:'Valor de la asesoría',cargo:'Valor',pago:'Valor pagado'}[ctTy]}</label><input class="in num" id="ctAmt" inputmode="numeric" placeholder="$0"></div>
+     ${ctTy==='ases'?'':ctTy==='turno'?`<div class="field"><label for="ctDate">Desde</label><input class="in" type="date" id="ctDate" value="${today()}"></div><div class="field"><label for="ctDate2">Hasta (si son varios días seguidos)</label><input class="in" type="date" id="ctDate2"></div>
+     <div class="field span2"><span class="lab">El valor es</span><div class="seg"><button type="button" data-per="dia" aria-pressed="${ctPer==='dia'}">Por día</button><button type="button" data-per="total" aria-pressed="${ctPer==='total'}">Total del turno</button></div></div>`:`<div class="field"><label for="ctDate">Fecha</label><input class="in" type="date" id="ctDate" value="${today()}"></div>`}
+     <div class="field"><label for="ctAmt">${{turno:ctPer==='dia'?'Valor por día':'Valor total del turno',ases:'Valor de la asesoría',cargo:'Valor',pago:'Valor pagado'}[ctTy]}</label><input class="in num" id="ctAmt" inputmode="numeric" placeholder="$0"></div>
      <div class="field span2"><label for="ctDesc">Detalle (opcional)</label><input class="in" id="ctDesc" placeholder="${{turno:'Ej: cocina, 8 h',ases:'Ej: carta de cócteles',cargo:'Ej: transporte',pago:'Ej: abono quincena'}[ctTy]}"></div>
-     ${isPay?`<div class="field span2"><span class="lab">¿Qué te están pagando?</span>${AL.open.length?`<div class="paylist">${AL.open.map(c=>{const m=c.m,part=c.left<nd(m.amount)-0.5;return `<button type="button" class="payit" data-sel="${m.id}" data-left="${Math.round(c.left)}" aria-pressed="${ctSel.includes(m.id)}"><span class="ck"></span><span class="pn">${esc(prodName(m))}<small>${m.date?fdate(m.date):'Sin fecha'}${part?` · abonado ${money(nd(m.amount)-c.left)}`:''}</small></span><b class="num">${money(c.left)}</b></button>`}).join('')}</div><div class="rowx" style="gap:6px"><button type="button" class="btn sm ghost" id="ctAll">Seleccionar todo</button><button type="button" class="btn sm ghost" id="ctNone">Quitar</button><span class="sp"></span><small class="muted" id="ctSelInfo"></small></div>`:'<small class="muted">No hay cobros pendientes. Si registras el pago queda como saldo a favor.</small>'}</div>
+     ${isPay?`<div class="field span2"><span class="lab">¿Qué te están pagando?</span>${AL.open.length?`<div class="paylist">${AL.open.map(c=>{const m=c.m,part=c.left<nd(m.amount)-0.5;return `<button type="button" class="payit" data-sel="${m.id}" data-left="${Math.round(c.left)}" aria-pressed="${ctSel.includes(m.id)}"><span class="ck"></span><span class="pn">${esc(prodName(m))}<small>${m.date?fdr(m):'Sin fecha'}${part?` · abonado ${money(nd(m.amount)-c.left)}`:''}</small></span><b class="num">${money(c.left)}</b></button>`}).join('')}</div><div class="rowx" style="gap:6px"><button type="button" class="btn sm ghost" id="ctAll">Seleccionar todo</button><button type="button" class="btn sm ghost" id="ctNone">Quitar</button><span class="sp"></span><small class="muted" id="ctSelInfo"></small></div>`:'<small class="muted">No hay cobros pendientes. Si registras el pago queda como saldo a favor.</small>'}</div>
      <div class="field span2"><span class="lab">Cómo pagó</span><div class="seg">${Object.entries(PM).map(([k,v])=>`<button type="button" data-pm="${k}" aria-pressed="${k===ctPay}">${v}</button>`).join('')}</div></div>
      <div class="field span2"><label for="ctFile">Comprobante (opcional)</label><input class="in" type="file" id="ctFile" accept="image/*">${ctImg?'<small class="muted">Imagen lista ✓</small>':''}</div>`:''}
     </div>
-    <div class="rowx"><span class="sp"></span><button class="btn">Registrar</button></div></form>
-   ${list.length?`<div class="stack" style="gap:8px">${list.map(({m})=>{const p=m.type==='pago';return `<div class="mv"><div class="mvh"><span class="chip" style="background:${p?'var(--good)':'#173C32'}">${LT[m.type]}${m.qty>1?` ×${m.qty}`:''}</span>${p&&m.method?`<span class="chip" style="background:#B8913A;color:#173C32">${PM[m.method]||m.method}</span>`:''}<span class="muted small">${m.date?fdate(m.date):'Sin fecha'}</span><span class="sp"></span><b class="num ledger-amt ${p?'neg':'pos'}">${p?'−':'+'}${money(nd(m.amount))}</b></div>
+    <div class="rowx">${ctTy==='turno'?'<small class="muted" id="ctDays"></small>':''}<span class="sp"></span><button class="btn">Registrar</button></div></form>
+   ${list.length?`<div class="stack" style="gap:8px">${list.map(({m})=>{const p=m.type==='pago';return `<div class="mv"><div class="mvh"><span class="chip" style="background:${p?'var(--good)':'#173C32'}">${LT[m.type]}${m.qty>1?(m.type==='turno'?` · ${m.qty} días`:` ×${m.qty}`):''}</span>${p&&m.method?`<span class="chip" style="background:#B8913A;color:#173C32">${PM[m.method]||m.method}</span>`:''}<span class="muted small">${m.date?fdr(m):'Sin fecha'}</span><span class="sp"></span><b class="num ledger-amt ${p?'neg':'pos'}">${p?'−':'+'}${money(nd(m.amount))}</b></div>
      ${p?st(m):''}
      ${m.desc?`<div class="small">${esc(m.desc)}</div>`:''}
      <div class="rowx" style="gap:6px">${p?'':st(m)}${m.img?`<button class="btn sm ghost" data-vimg="${m.img}">Ver comprobante</button>`:''}${p?`<button class="btn sm" data-rcpt="${m.id}" style="background:#173C32;color:#F3EBDD">Recibo PDF</button>`:''}<span class="sp"></span><button class="x" data-lm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty">Sin movimientos todavía.</div>'}</div>`;
@@ -1189,29 +1192,44 @@ function renderCtrl(){
   if($('#ctAll'))$('#ctAll').onclick=()=>{ctSel=AL.open.map(c=>c.m.id);selSync()};
   if($('#ctNone'))$('#ctNone').onclick=()=>{ctSel=[];selSync();$('#ctAmt').value=''};
   selSync();
+  const dSync=()=>{const o=$('#ctDays');if(!o)return;const a=$('#ctDate').value,b=$('#ctDate2').value;if(b&&b<a){o.textContent='⚠ "Hasta" es antes de "Desde"';return}const n=nDays(a,b||a),v=pm($('#ctAmt').value)||0;o.textContent=`${n} día${n>1?'s':''}`+(v?` · total ${money(ctPer==='dia'?v*n:v)}`+(ctPer==='total'&&n>1?` (${money(v/n)}/día)`:''):'')};
+  ['#ctDate','#ctDate2','#ctAmt'].forEach(q=>{const e=$(q);if(e)e.addEventListener('input',dSync)});
+  B.querySelectorAll('[data-per]').forEach(b=>b.onclick=()=>{ctPer=b.dataset.per;B.querySelectorAll('[data-per]').forEach(x=>x.setAttribute('aria-pressed',x===b));const l=B.querySelector('label[for="ctAmt"]');if(l)l.textContent=ctPer==='dia'?'Valor por día':'Valor total del turno';dSync()});
+  dSync();
   B.querySelectorAll('[data-pm]').forEach(b=>b.onclick=()=>{ctPay=b.dataset.pm;B.querySelectorAll('[data-pm]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   const fi=$('#ctFile');if(fi)fi.onchange=async()=>{const f=fi.files[0];if(f){ctImg=await shrink(f,1100,'image/jpeg',.75);toast('Comprobante listo')}};
   $('#ctBack').onclick=()=>{ctR=null;renderCtrl()};
-  $('#ctForm').onsubmit=e=>{e.preventDefault();const amt=pm($('#ctAmt').value);if(!amt)return toast('Escribe el valor');const qty=1;
-    const m={id:uid(),type:ctTy,date:ctTy==='ases'?'':($('#ctDate')?.value||today()),amount:amt*qty,unit:amt,qty,desc:$('#ctDesc').value.trim(),at:Date.now()};
+  $('#ctForm').onsubmit=e=>{e.preventDefault();const amt=pm($('#ctAmt').value);if(!amt)return toast('Escribe el valor');
+    const d1=ctTy==='ases'?'':($('#ctDate')?.value||today());let d2=ctTy==='turno'?($('#ctDate2')?.value||''):'';if(d2&&d2<d1)return toast('"Hasta" no puede ser antes de "Desde"');if(d2===d1)d2='';
+    const qty=d2?nDays(d1,d2):1;if(qty>62)return toast('Máximo 62 días por turno');const unit=ctTy==='turno'&&ctPer==='total'?amt/qty:amt;
+    const m={id:uid(),type:ctTy,date:d1,amount:Math.round(unit*qty),unit,qty,desc:$('#ctDesc').value.trim(),at:Date.now()};if(d2)m.date2=d2;
     if(ctTy==='pago'){m.method=ctPay;if(ctImg)m.img=storeImg(ctImg);if(ctSel.length)m.pays=AL.open.map(c=>c.m.id).filter(id=>ctSel.includes(id))}
     L.push(m);ctImg=null;ctSel=[];saveR(ctR);blip(ctTy==='pago'?1300:1000);toast(ctTy==='pago'?'Pago registrado':'Registrado');renderCtrl()};
   B.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}const m=L.find(x=>x.id===b.dataset.lm);if(m?.img)delDoc('img_'+m.img);R.ledger=L.filter(x=>x.id!==b.dataset.lm);saveR(ctR);renderCtrl()});
   B.querySelectorAll('[data-vimg]').forEach(b=>b.onclick=async()=>{const src=await loadImg(b.dataset.vimg);const P=$('#genPane');P.innerHTML=`<h2>Comprobante</h2>${src?`<img src="${src}" alt="Comprobante" style="width:100%;border-radius:10px">`:'<span class="muted">No se encontró la imagen</span>'}<button class="btn ghost" id="vClose">Cerrar</button>`;$('#vClose').onclick=()=>$('#genSheet').hidden=true;$('#genSheet').hidden=false});
   B.querySelectorAll('[data-rcpt]').forEach(b=>b.onclick=()=>receipt(R,r,b.dataset.rcpt));
-  $('#ctBill').onclick=()=>receipt(R,r,null);
+  $('#ctBill').onclick=()=>billSheet(R,r);
 }
+function billSheet(R,r){const {open}=allocate(R.ledger);if(!open.length)return toast(`${r.name} está al día`);let sel=open.map(c=>c.m.id);const P=$('#genPane');
+  const draw=()=>{const tot=open.filter(c=>sel.includes(c.m.id)).reduce((a,c)=>a+c.left,0);P.innerHTML=`<h2>Cuenta de cobro</h2><span class="muted small">Marca lo que quieres cobrar en esta cuenta.</span>
+   <div class="paylist" style="max-height:50vh">${open.map(c=>{const m=c.m,part=c.left<nd(m.amount)-0.5;return `<button type="button" class="payit" data-bs="${m.id}" aria-pressed="${sel.includes(m.id)}"><span class="ck"></span><span class="pn">${esc(prodName(m))}${m.qty>1&&m.type==='turno'?` · ${m.qty} días`:''}<small>${m.date?fdr(m):'Sin fecha'}${part?` · ya abonado ${money(nd(m.amount)-c.left)}`:''}</small></span><b class="num">${money(c.left)}</b></button>`}).join('')}</div>
+   <div class="rowx" style="gap:6px"><button type="button" class="btn sm ghost" id="bsAll">Seleccionar todo</button><button type="button" class="btn sm ghost" id="bsNone">Quitar</button><span class="sp"></span><b class="num">${money(tot)}</b></div>
+   <button class="btn" id="bsGo" style="background:#173C32;color:#F3EBDD" ${sel.length?'':'disabled'}>Descargar cuenta de cobro${sel.length&&sel.length<open.length?` (${sel.length} de ${open.length})`:''}</button><button class="btn ghost" id="bsX">Cancelar</button>`;
+   P.querySelectorAll('[data-bs]').forEach(b=>b.onclick=()=>{const id=b.dataset.bs;sel=sel.includes(id)?sel.filter(x=>x!==id):[...sel,id];blip(900,.02);draw()});
+   $('#bsAll').onclick=()=>{sel=open.map(c=>c.m.id);draw()};$('#bsNone').onclick=()=>{sel=[];draw()};$('#bsX').onclick=()=>$('#genSheet').hidden=true;
+   $('#bsGo').onclick=()=>{if(!sel.length)return toast('Marca al menos un cobro');$('#genSheet').hidden=true;receipt(R,r,null,sel)}};
+  draw();$('#genSheet').hidden=false}
 /* recibo tipo POS (PDF 80 mm) */
-async function receipt(R,r,payId){
+async function receipt(R,r,payId,sel){
   const L=R.ledger,{pays,open}=allocate(L);let title,lines,pay=null,num,tot,extraRows=[];
   if(payId){pay=L.find(m=>m.id===payId);const pi=L.filter(m=>m.type==='pago').findIndex(m=>m.id===payId);num=String(pi+1).padStart(4,'0');
     const parts=pays[payId]?.parts||[];const rows=[];
-    for(const p of parts){const m=p.m;const q=m.qty||1,u=m.unit||nd(m.amount)/q;if(p.amt>=nd(m.amount)-0.5){for(let k=0;k<q;k++)rows.push({name:prodName(m)+(m.date?` (${fdate(m.date)})`:''),unit:u})}else rows.push({name:'Abono a '+prodName(m)+(m.date?` (${fdate(m.date)})`:''),unit:p.amt})}
+    for(const p of parts){const m=p.m;const q=m.qty||1,u=m.unit||nd(m.amount)/q;if(p.amt>=nd(m.amount)-0.5){for(let k=0;k<q;k++)rows.push({name:prodName(m)+(m.date?` (${fdr(m)})`:''),unit:u})}else rows.push({name:'Abono a '+prodName(m)+(m.date?` (${fdr(m)})`:''),unit:p.amt})}
     lines=groupLines(rows);if(pays[payId]?.extra>0.5)lines.push({name:'Saldo a favor',qty:1,unit:pays[payId].extra,total:pays[payId].extra});
     title='RECIBO DE PAGO';tot=nd(pay.amount);
     const idx=L.indexOf(pay);const before=L.slice(0,idx+1);const due=before.reduce((a,m)=>a+(m.type==='pago'?-nd(m.amount):nd(m.amount)),0);
     extraRows=[['Método de pago',PM[pay.method]||'—'],['Saldo pendiente',money(Math.max(0,due))]];
-  }else{const rows=[];for(const c of open){const m=c.m;const q=m.qty||1,u=m.unit||nd(m.amount)/q;if(c.left>=nd(m.amount)-0.5){for(let k=0;k<q;k++)rows.push({name:prodName(m)+(m.date?` (${fdate(m.date)})`:''),unit:u})}else rows.push({name:'Saldo de '+prodName(m)+(m.date?` (${fdate(m.date)})`:''),unit:c.left})}
+  }else{const rows=[];for(const c of open.filter(c=>!sel||sel.includes(c.m.id))){const m=c.m;const q=m.qty||1,u=m.unit||nd(m.amount)/q;if(c.left>=nd(m.amount)-0.5){for(let k=0;k<q;k++)rows.push({name:prodName(m)+(m.date?` (${fdr(m)})`:''),unit:u})}else rows.push({name:'Saldo de '+prodName(m)+(m.date?` (${fdr(m)})`:''),unit:c.left})}
     lines=groupLines(rows);if(!lines.length)return toast(`${r.name} está al día`);title='CUENTA DE COBRO';num=String((R.billN=(R.billN||0)+1)).padStart(4,'0');saveR(ctR);tot=lines.reduce((a,l)=>a+l.total,0);extraRows=[['Estado','Pendiente de pago']];}
   // dibujo
   const W=384,k=2,font=getComputedStyle(document.body).fontFamily;const mono=`"Courier New",ui-monospace,monospace`;
