@@ -1239,7 +1239,7 @@ async function migrateMiradorData(){
   const card=S.meta.restaurants.find(x=>x.id==='mirador'||norm(x.name).includes('mirador del cielo'));if(!card)return;const R=S.r[card.id];if(!R)return;let changed=false;
   const setIng=(id,name,pack,price,unit='g',yieldPct=100)=>{let x=R.ingredients.find(i=>i.id===id)||R.ingredients.find(i=>norm(i.name)===norm(name));if(!x){x={id,name,pack,price,unit,yield:yieldPct};R.ingredients.push(x);changed=true;return x}if(x.name!==name||x.pack!==pack||x.price!==price||x.unit!==unit||x.yield!==yieldPct){Object.assign(x,{name,pack,price,unit,yield:yieldPct});changed=true}return x};
   const berries=setIng('ifdw52oj','Arandanos',125,5900),straw=setIng('ah19arr2','Fresa',480,5600,'g',95),sugar=R.ingredients.find(i=>i.id==='k09jxkuo')||R.ingredients.find(i=>norm(i.name)==='azucar blanca');
-  const jamIng=setIng('axumxp70','Mermelada',695,11833);
+  const jamIng=setIng('axumxp70','Mermelada',695,12128);
   R.ingredients.filter(i=>norm(i.name)==='sirope').forEach(i=>{i.name='Almíbar';changed=true});
   let cat=R.categories.find(c=>norm(c.name)==='subrecetas');if(!cat){cat={id:'eidc2guq',name:'Subrecetas'};R.categories.push(cat);changed=true}
   let rec=R.recipes.find(x=>x.id==='mrmld695'||norm(x.name)==='mermelada');if(!rec){rec={id:'mrmld695',name:'Mermelada',cat:cat.id,items:[],portions:1,price:0,error:null,target:null};R.recipes.push(rec);changed=true}
