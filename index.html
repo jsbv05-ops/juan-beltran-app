@@ -594,7 +594,7 @@ const catName=(R,id)=>R.categories.find(c=>c.id===id)?.name||'Sin categoría';
 
 /* ---------- restaurante ---------- */
 let curR=null,curTab='recipes',curCat='all',recQ='';
-async function openRest(id){curR=restById(id);await loadR(id);curTab='recipes';curCat='all';recQ='';go('rest');renderRest()}
+async function openRest(id){curR=restById(id);await loadR(id);curTab='recipes';curCat='all';recQ='';mpF='all';mpQ='';go('rest');renderRest()}
 $('#rEdit').onclick=()=>openCard(curR);
 $$('#rTabs .tab').forEach(t=>t.onclick=()=>{curTab=t.dataset.tab;renderRest()});
 function renderRest(){
@@ -616,13 +616,27 @@ function recipesView(R){
   ${list.length?groups.map(g=>`${g.c?`<h2 class="sec" style="margin-top:6px">${esc(g.c.name)} <span class="muted small">${g.items.length}</span></h2>`:''}<div class="rlist">${g.items.map(card).join('')}</div>`).join(''):`<div class="empty card">No hay recetas aquí todavía. Carga la materia prima y crea la primera con “Nueva receta”.</div>`}
   </div>`;
 }
+let mpF='all',mpQ='';
 function mpView(R){
+  const usesOf=i=>R.recipes.filter(r=>r.items.some(x=>x.ing===i.id)).length;
+  const L=[...R.ingredients].sort((a,b)=>(a.name||'').localeCompare(b.name||'','es'));
+  const np=L.filter(i=>!(nd(i.price)>0)).length,un=L.filter(i=>!usesOf(i)).length;
+  const F=[['all','Todas',L.length],['noprice','⚠ Sin precio',np],['used','En recetas',L.length-un],['unused','Sin usar',un]];
   return `<div class="stack">
   <div class="rowx"><h2 class="sec">Materia prima</h2><span class="muted small">Costo por unidad = precio ÷ (presentación × rendimiento)</span><span class="sp"></span><button class="btn" data-act="addIng">+ Ingrediente</button></div>
-  ${R.ingredients.filter(i=>!(nd(i.price)>0)).length?`<div class="missbox">⚠ ${R.ingredients.filter(i=>!(nd(i.price)>0)).length} materia(s) prima(s) sin precio: ${R.ingredients.filter(i=>!(nd(i.price)>0)).map(i=>esc(i.name)).join(', ')}</div>`:''}
+  <div class="rowx"><input class="in" id="mpQ" type="search" placeholder="🔍 Buscar materia prima…" value="${esc(mpQ)}" style="flex:1;min-width:180px;border-radius:999px"></div>
+  <div class="tabs" style="padding-top:0">${F.map(([k,l,n])=>`<button class="tab" data-mpf="${k}" aria-selected="${mpF===k}">${l} · ${n}</button>`).join('')}</div>
+  <span class="muted small" id="mpCount"></span>
   <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Unidad</th><th>Presentación</th><th>Precio compra</th><th>Rendimiento %</th><th>Costo/unidad</th><th>En recetas</th><th></th></tr></thead><tbody>
-  ${R.ingredients.map(i=>{const uses=R.recipes.filter(r=>r.items.some(x=>x.ing===i.id)).length;return `<tr data-ing="${i.id}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><select class="in" data-f="unit">${UNITS.map(u=>`<option ${u===i.unit?'selected':''}>${u}</option>`).join('')}</select></td><td><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price||''}" placeholder="⚠ sin precio" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
+  ${L.map(i=>{const uses=usesOf(i);return `<tr data-ing="${i.id}" data-uses="${uses}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><select class="in" data-f="unit">${UNITS.map(u=>`<option ${u===i.unit?'selected':''}>${u}</option>`).join('')}</select></td><td><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price||''}" placeholder="⚠ sin precio" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
   </tbody></table></div>${R.ingredients.length?'':'<div class="empty">Agrega tu primer ingrediente con su presentación y precio de compra.</div>'}</div>`;
+}
+function mpFilter(R){
+  const q=norm(mpQ);let shown=0;
+  $$('#rBody tr[data-ing]').forEach(tr=>{const i=R.ingredients.find(x=>x.id===tr.dataset.ing);if(!i)return;const uses=+tr.dataset.uses;
+    const ok=(!q||norm(i.name).includes(q))&&(mpF==='all'||(mpF==='noprice'&&!(nd(i.price)>0))||(mpF==='used'&&uses>0)||(mpF==='unused'&&uses===0));
+    tr.hidden=!ok;if(ok)shown++});
+  const c=$('#mpCount');if(c)c.textContent=shown?`${shown} materia(s) prima(s)`:'Nada con ese filtro';
 }
 function globalView(R){
   return `<div class="stack wrapmax">
@@ -650,7 +664,8 @@ function bindRest(R){
   act('cats',()=>openCats(R));
   const rq=$('#recQ');if(rq)rq.oninput=()=>{recQ=rq.value;renderRest();setTimeout(()=>{const x=$('#recQ');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},20)};
   act('newRecipe',()=>{const r={id:uid(),name:'Nueva receta',cat:curCat!=='all'&&curCat!=='none'?curCat:(R.categories[0]?.id||null),portions:1,price:0,error:null,target:null,items:[]};R.recipes.push(r);saveR(curR.id);openRecipe(r.id)});
-  act('addIng',()=>{R.ingredients.push({id:uid(),name:'',unit:'g',pack:1000,price:0,yield:100});saveR(curR.id);renderRest();setTimeout(()=>{const ins=$$('#rBody tr[data-ing] [data-f="name"]');ins[ins.length-1]?.focus()},30)});
+  act('addIng',()=>{const id=uid();R.ingredients.push({id,name:'',unit:'g',pack:1000,price:0,yield:100});mpF='all';mpQ='';saveR(curR.id);renderRest();setTimeout(()=>{const el=$(`#rBody tr[data-ing="${id}"] [data-f="name"]`);if(el){el.scrollIntoView({block:'center'});el.focus()}},60)});
+  if($('#mpQ')){mpFilter(R);$('#mpQ').oninput=e=>{mpQ=e.target.value;mpFilter(R)};B.querySelectorAll('[data-mpf]').forEach(b=>b.onclick=()=>{mpF=b.dataset.mpf;B.querySelectorAll('[data-mpf]').forEach(x=>x.setAttribute('aria-selected',x===b));mpFilter(R)})}
   B.querySelectorAll('tr[data-ing]').forEach(tr=>{const ing=R.ingredients.find(i=>i.id===tr.dataset.ing);tr.querySelectorAll('[data-f]').forEach(inp=>{const upd=()=>{const f=inp.dataset.f;ing[f]=f==='price'?pm(inp.value):['pack','yield'].includes(f)?nd(inp.value):inp.value;saveR(curR.id);const uc=tr.querySelector('[data-uc]');if(uc)uc.innerHTML=`<b>${money(unitCost(ing))}</b>/${esc(ing.unit)}`};if(inp.tagName==='SELECT')inp.onchange=upd;else{inp.oninput=upd;inp.onchange=upd}})});
   B.querySelectorAll('[data-del-ing]').forEach(b=>b.onclick=()=>{const id=b.dataset.delIng;const used=R.recipes.filter(r=>r.items.some(x=>x.ing===id));if(used.length&&b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';toast(`Está en ${used.length} receta(s). Toca otra vez para eliminar.`);return}R.ingredients=R.ingredients.filter(i=>i.id!==id);R.recipes.forEach(r=>r.items=r.items.filter(x=>x.ing!==id));saveR(curR.id);renderRest()});
   act('saveDefaults',()=>{R.settings.error=nd($('#gErr').value);R.settings.target=nd($('#gTar').value);R.settings.opex=nd($('#gOpx').value);saveR(curR.id);toast('Valores guardados')});
