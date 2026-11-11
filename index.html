@@ -259,6 +259,15 @@ td .in{padding:6px 8px;border-radius:8px}
 .stepper b{min-width:34px;text-align:center}
 .eline{background:var(--panel);border-radius:14px;box-shadow:var(--shadow);padding:12px;display:flex;flex-direction:column;gap:8px}
 .egrid{display:grid;grid-template-columns:1.2fr .8fr 1.2fr;gap:8px}
+.paylist{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;padding:2px}
+.payit{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--panel);border:2px solid transparent;border-radius:12px;padding:9px 12px;box-shadow:var(--shadow);color:inherit;font:inherit;cursor:pointer}
+.payit .ck{width:22px;height:22px;border-radius:7px;border:2px solid #B8913A;flex:none;display:grid;place-items:center}
+.payit[aria-pressed="true"]{border-color:#173C32;background:color-mix(in srgb,#173C32 10%,var(--panel))}
+.payit[aria-pressed="true"] .ck{background:#173C32;border-color:#173C32}
+.payit[aria-pressed="true"] .ck::after{content:"✓";color:#F3EBDD;font-size:14px;font-weight:800}
+.payit .pn{flex:1;min-width:0;display:flex;flex-direction:column;font-weight:700}
+.payit .pn small{font-weight:400;opacity:.7}
+.pill.part{background:#E2B53E;color:#173C32}
 .mv{background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .mvh{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .segwrap{display:grid;grid-template-columns:1fr 1fr;border-radius:16px;gap:2px;width:100%}
@@ -348,7 +357,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.7</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.8</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1131,14 +1140,19 @@ function importMap(R,per,rows){
 }
 
 /* ---------- controles: turnos, asesorías y pagos ---------- */
-let ctR=null,ctTy='turno',ctPay='transferencia',ctImg=null;
+let ctR=null,ctTy='turno',ctPay='transferencia',ctImg=null,ctSel=[];
 const LT={turno:'Turno',ases:'Asesoría',cargo:'Otro cobro',pago:'Pago / abono'};
 const PM={transferencia:'Transferencia',efectivo:'Efectivo'};
 const balance=R=>(R?.ledger||[]).reduce((a,m)=>a+(m.type==='pago'?-nd(m.amount):nd(m.amount)),0);
 /* reparte cada pago entre los cobros más antiguos */
-function allocate(L){const ch=L.filter(m=>m.type!=='pago').map(m=>({m,left:nd(m.amount)}));const pays={};let i=0;
-  for(const p of L.filter(m=>m.type==='pago')){let rest=nd(p.amount);const parts=[];while(rest>0.5&&i<ch.length){const c=ch[i];const take=Math.min(rest,c.left);if(take>0){parts.push({m:c.m,amt:take,full:take>=nd(c.m.amount)-0.5&&c.left>=nd(c.m.amount)-0.5});c.left-=take;rest-=take}if(c.left<=0.5)i++}pays[p.id]={parts,extra:rest};}
-  return{pays,open:ch.filter(c=>c.left>0.5)}}
+function allocate(L){const ch=L.filter(m=>m.type!=='pago').map(m=>({m,left:nd(m.amount)}));const pays={};
+  const take=(c,rest,parts)=>{const t=Math.min(rest,c.left);if(t>0.5){parts.push({m:c.m,amt:t,full:t>=nd(c.m.amount)-0.5});c.left-=t;return rest-t}return rest};
+  for(const p of L.filter(m=>m.type==='pago')){let rest=nd(p.amount);const parts=[];
+    if(Array.isArray(p.pays))for(const id of p.pays){const c=ch.find(x=>x.m.id===id);if(c&&rest>0.5)rest=take(c,rest,parts)}
+    for(const c of ch){if(rest<=0.5)break;if(c.left>0.5)rest=take(c,rest,parts)}
+    pays[p.id]={parts,extra:rest>0.5?rest:0};}
+  const left={};for(const c of ch)left[c.m.id]=c.left;
+  return{pays,open:ch.filter(c=>c.left>0.5),left}}
 const prodName=m=>(m.type==='turno'?'Turno':m.type==='ases'?'Asesoría':'Servicio')+(m.desc?` · ${m.desc}`:'');
 function groupLines(rows){const g=[];for(const r of rows){const k=r.name+'|'+r.unit;const f=g.find(x=>x.k===k);if(f){f.qty++;f.total+=r.unit}else g.push({k,name:r.name,unit:r.unit,qty:1,total:r.unit})}return g}
 function renderCtrl(){
@@ -1146,11 +1160,13 @@ function renderCtrl(){
   if(!ctR){$('#ctTitle').textContent='Controles';const tot=S.meta.restaurants.reduce((a,r)=>a+Math.max(0,balance(S.r[r.id])),0);
     B.innerHTML=`<div class="stack wrapmax"><div class="kpis"><div class="kpi hl"><small>Te deben en total</small><b class="num">${money(tot)}</b></div></div>
      <div class="rrows">${S.meta.restaurants.map(r=>{const b=balance(S.r[r.id]);return `<button class="rrow" data-cr="${r.id}"><span class="lg" style="background:${tone(r)}">${rFace(r)}</span><span class="nm">${esc(r.name)}</span><span class="st">${b>0.5?`<small>Debe</small><span class="pill due num">${money(b)}</span>`:b<-0.5?`<small>Saldo a favor</small><span class="pill fav num">${money(-b)}</span>`:`<span class="pill ok">Al día ✓</span>`}</span></button>`}).join('')||'<div class="empty">Crea un restaurante primero.</div>'}</div></div>`;
-    B.querySelectorAll('[data-cr]').forEach(b=>b.onclick=()=>{ctR=b.dataset.cr;ctTy='turno';ctImg=null;blip(800,.03);renderCtrl()});return}
+    B.querySelectorAll('[data-cr]').forEach(b=>b.onclick=()=>{ctR=b.dataset.cr;ctTy='turno';ctImg=null;ctSel=[];blip(800,.03);renderCtrl()});return}
   const R=S.r[ctR],r=restById(ctR);$('#ctTitle').textContent='Controles · '+r.name;const L=R.ledger;
   const cobr=L.filter(m=>m.type!=='pago').reduce((a,m)=>a+nd(m.amount),0),pag=L.filter(m=>m.type==='pago').reduce((a,m)=>a+nd(m.amount),0);
   const list=L.map((m,i)=>({m,i})).reverse();
-  const isPay=ctTy==='pago';
+  const isPay=ctTy==='pago';const AL=allocate(L);ctSel=ctSel.filter(id=>AL.left[id]>0.5);
+  const st=m=>{if(m.type==='pago'){const P=AL.pays[m.id];if(!P)return '';const names=P.parts.map(x=>(x.full?'':'Abono a ')+prodName(x.m)+(x.m.date?' '+fdate(x.m.date):''));return names.length||P.extra?`<div class="small muted">Paga: ${esc(names.join(' · '))}${P.extra?`${names.length?' · ':''}saldo a favor ${money(P.extra)}`:''}</div>`:''}
+    const lf=AL.left[m.id]??0,tot=nd(m.amount);return lf<=0.5?'<span class="pill ok">Pagado ✓</span>':lf<tot-0.5?`<span class="pill part">Abonado ${money(tot-lf)} · falta ${money(lf)}</span>`:'<span class="pill due">Pendiente</span>'};
   B.innerHTML=`<div class="stack wrapmax"><div class="rowx"><button class="btn sm ghost" id="ctBack">← Restaurantes</button><span class="sp"></span><button class="btn sm" id="ctBill" style="background:#173C32;color:#F3EBDD">Cuenta de cobro</button></div>
    <div class="kpis"><div class="kpi"><small>Cobrado</small><b class="num">${money(cobr)}</b></div><div class="kpi"><small>Pagado</small><b class="num">${money(pag)}</b></div><div class="kpi hl"><small>Saldo pendiente</small><b class="num">${money(cobr-pag)}</b></div></div>
    <form class="card stack" id="ctForm"><div class="seg segwrap" role="group">${Object.entries(LT).map(([k,v])=>`<button type="button" data-ty="${k}" aria-pressed="${k===ctTy}">${v}</button>`).join('')}</div>
@@ -1158,21 +1174,28 @@ function renderCtrl(){
      ${ctTy==='ases'?'':`<div class="field"><label for="ctDate">Fecha</label><input class="in" type="date" id="ctDate" value="${today()}"></div>`}
      <div class="field"><label for="ctAmt">${{turno:'Valor del turno',ases:'Valor de la asesoría',cargo:'Valor',pago:'Valor pagado'}[ctTy]}</label><input class="in num" id="ctAmt" inputmode="numeric" placeholder="$0"></div>
      <div class="field span2"><label for="ctDesc">Detalle (opcional)</label><input class="in" id="ctDesc" placeholder="${{turno:'Ej: cocina, 8 h',ases:'Ej: carta de cócteles',cargo:'Ej: transporte',pago:'Ej: abono quincena'}[ctTy]}"></div>
-     ${isPay?`<div class="field span2"><span class="lab">Cómo pagó</span><div class="seg">${Object.entries(PM).map(([k,v])=>`<button type="button" data-pm="${k}" aria-pressed="${k===ctPay}">${v}</button>`).join('')}</div></div>
+     ${isPay?`<div class="field span2"><span class="lab">¿Qué te están pagando?</span>${AL.open.length?`<div class="paylist">${AL.open.map(c=>{const m=c.m,part=c.left<nd(m.amount)-0.5;return `<button type="button" class="payit" data-sel="${m.id}" data-left="${Math.round(c.left)}" aria-pressed="${ctSel.includes(m.id)}"><span class="ck"></span><span class="pn">${esc(prodName(m))}<small>${m.date?fdate(m.date):'Sin fecha'}${part?` · abonado ${money(nd(m.amount)-c.left)}`:''}</small></span><b class="num">${money(c.left)}</b></button>`}).join('')}</div><div class="rowx" style="gap:6px"><button type="button" class="btn sm ghost" id="ctAll">Seleccionar todo</button><button type="button" class="btn sm ghost" id="ctNone">Quitar</button><span class="sp"></span><small class="muted" id="ctSelInfo"></small></div>`:'<small class="muted">No hay cobros pendientes. Si registras el pago queda como saldo a favor.</small>'}</div>
+     <div class="field span2"><span class="lab">Cómo pagó</span><div class="seg">${Object.entries(PM).map(([k,v])=>`<button type="button" data-pm="${k}" aria-pressed="${k===ctPay}">${v}</button>`).join('')}</div></div>
      <div class="field span2"><label for="ctFile">Comprobante (opcional)</label><input class="in" type="file" id="ctFile" accept="image/*">${ctImg?'<small class="muted">Imagen lista ✓</small>':''}</div>`:''}
     </div>
     <div class="rowx"><span class="sp"></span><button class="btn">Registrar</button></div></form>
    ${list.length?`<div class="stack" style="gap:8px">${list.map(({m})=>{const p=m.type==='pago';return `<div class="mv"><div class="mvh"><span class="chip" style="background:${p?'var(--good)':'#173C32'}">${LT[m.type]}${m.qty>1?` ×${m.qty}`:''}</span>${p&&m.method?`<span class="chip" style="background:#B8913A;color:#173C32">${PM[m.method]||m.method}</span>`:''}<span class="muted small">${m.date?fdate(m.date):'Sin fecha'}</span><span class="sp"></span><b class="num ledger-amt ${p?'neg':'pos'}">${p?'−':'+'}${money(nd(m.amount))}</b></div>
+     ${p?st(m):''}
      ${m.desc?`<div class="small">${esc(m.desc)}</div>`:''}
-     <div class="rowx" style="gap:6px">${m.img?`<button class="btn sm ghost" data-vimg="${m.img}">Ver comprobante</button>`:''}${p?`<button class="btn sm" data-rcpt="${m.id}" style="background:#173C32;color:#F3EBDD">Recibo PDF</button>`:''}<span class="sp"></span><button class="x" data-lm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty">Sin movimientos todavía.</div>'}</div>`;
-  B.querySelectorAll('[data-ty]').forEach(b=>b.onclick=()=>{ctTy=b.dataset.ty;ctImg=null;renderCtrl()});
+     <div class="rowx" style="gap:6px">${p?'':st(m)}${m.img?`<button class="btn sm ghost" data-vimg="${m.img}">Ver comprobante</button>`:''}${p?`<button class="btn sm" data-rcpt="${m.id}" style="background:#173C32;color:#F3EBDD">Recibo PDF</button>`:''}<span class="sp"></span><button class="x" data-lm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty">Sin movimientos todavía.</div>'}</div>`;
+  B.querySelectorAll('[data-ty]').forEach(b=>b.onclick=()=>{ctTy=b.dataset.ty;ctImg=null;ctSel=[];renderCtrl()});
+  const selSync=()=>{let sum=0;B.querySelectorAll('[data-sel]').forEach(x=>{const on=ctSel.includes(x.dataset.sel);x.setAttribute('aria-pressed',on);if(on)sum+=+x.dataset.left});const inf=$('#ctSelInfo');if(inf)inf.textContent=ctSel.length?`${ctSel.length} seleccionado${ctSel.length>1?'s':''} · ${money(sum)}`:'';const a=$('#ctAmt');if(a&&ctSel.length)a.value=money(sum)};
+  B.querySelectorAll('[data-sel]').forEach(b=>b.onclick=()=>{const id=b.dataset.sel;ctSel=ctSel.includes(id)?ctSel.filter(x=>x!==id):[...ctSel,id];blip(900,.02);selSync()});
+  if($('#ctAll'))$('#ctAll').onclick=()=>{ctSel=AL.open.map(c=>c.m.id);selSync()};
+  if($('#ctNone'))$('#ctNone').onclick=()=>{ctSel=[];selSync();$('#ctAmt').value=''};
+  selSync();
   B.querySelectorAll('[data-pm]').forEach(b=>b.onclick=()=>{ctPay=b.dataset.pm;B.querySelectorAll('[data-pm]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   const fi=$('#ctFile');if(fi)fi.onchange=async()=>{const f=fi.files[0];if(f){ctImg=await shrink(f,1100,'image/jpeg',.75);toast('Comprobante listo')}};
   $('#ctBack').onclick=()=>{ctR=null;renderCtrl()};
   $('#ctForm').onsubmit=e=>{e.preventDefault();const amt=pm($('#ctAmt').value);if(!amt)return toast('Escribe el valor');const qty=1;
     const m={id:uid(),type:ctTy,date:ctTy==='ases'?'':($('#ctDate')?.value||today()),amount:amt*qty,unit:amt,qty,desc:$('#ctDesc').value.trim(),at:Date.now()};
-    if(ctTy==='pago'){m.method=ctPay;if(ctImg)m.img=storeImg(ctImg)}
-    L.push(m);ctImg=null;saveR(ctR);blip(ctTy==='pago'?1300:1000);toast(ctTy==='pago'?'Pago registrado':'Registrado');renderCtrl()};
+    if(ctTy==='pago'){m.method=ctPay;if(ctImg)m.img=storeImg(ctImg);if(ctSel.length)m.pays=AL.open.map(c=>c.m.id).filter(id=>ctSel.includes(id))}
+    L.push(m);ctImg=null;ctSel=[];saveR(ctR);blip(ctTy==='pago'?1300:1000);toast(ctTy==='pago'?'Pago registrado':'Registrado');renderCtrl()};
   B.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}const m=L.find(x=>x.id===b.dataset.lm);if(m?.img)delDoc('img_'+m.img);R.ledger=L.filter(x=>x.id!==b.dataset.lm);saveR(ctR);renderCtrl()});
   B.querySelectorAll('[data-vimg]').forEach(b=>b.onclick=async()=>{const src=await loadImg(b.dataset.vimg);const P=$('#genPane');P.innerHTML=`<h2>Comprobante</h2>${src?`<img src="${src}" alt="Comprobante" style="width:100%;border-radius:10px">`:'<span class="muted">No se encontró la imagen</span>'}<button class="btn ghost" id="vClose">Cerrar</button>`;$('#vClose').onclick=()=>$('#genSheet').hidden=true;$('#genSheet').hidden=false});
   B.querySelectorAll('[data-rcpt]').forEach(b=>b.onclick=()=>receipt(R,r,b.dataset.rcpt));
