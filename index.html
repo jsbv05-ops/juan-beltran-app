@@ -339,7 +339,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.4</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.5</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -611,7 +611,7 @@ function recipesView(R){
   return `<div class="stack">
   <div class="kpis"><div class="kpi hl"><small>Recetas</small><b class="num">${R.recipes.length}</b></div><div class="kpi"><small>Margen promedio</small><b class="num">${pct(avgM)}</b></div><div class="kpi"><small>Categorías</small><b class="num">${R.categories.length}</b></div><div class="kpi"><small>Materias primas</small><b class="num">${R.ingredients.length}</b></div></div>
   <div class="tabs" style="padding-top:0"><button class="tab" data-cat="all" aria-selected="${curCat==='all'}">Todas</button>${R.categories.map(c=>`<button class="tab" data-cat="${c.id}" aria-selected="${curCat===c.id}">${esc(c.name)}</button>`).join('')}<button class="tab" data-act="cats">✎ Categorías</button></div>
-  <div class="rowx"><input class="in" id="recQ" type="search" placeholder="🔍 Buscar receta…" value="${esc(recQ)}" style="flex:1;min-width:160px;border-radius:999px"><button class="btn" data-act="newRecipe">+ Nueva receta</button></div>
+  <div class="rowx"><input class="in" id="recQ" type="search" placeholder="🔍 Buscar receta…" value="${esc(recQ)}" style="flex:1;min-width:160px;border-radius:999px"><button class="btn ghost" data-act="orderRecipes">↕ Ordenar recetas</button><button class="btn" data-act="newRecipe">+ Nueva receta</button></div>
   ${q?`<span class="muted small">${list.length} resultado(s) para “${esc(recQ)}”</span>`:''}
   ${list.length?groups.map(g=>`${g.c?`<h2 class="sec" style="margin-top:6px">${esc(g.c.name)} <span class="muted small">${g.items.length}</span></h2>`:''}<div class="rlist">${g.items.map(card).join('')}</div>`).join(''):`<div class="empty card">No hay recetas aquí todavía. Carga la materia prima y crea la primera con “Nueva receta”.</div>`}
   </div>`;
@@ -662,6 +662,7 @@ function bindRest(R){
   B.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.open));
   B.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{curCat=b.dataset.cat;renderRest()});
   act('cats',()=>openCats(R));
+  act('orderRecipes',()=>openRecipeOrder(R));
   const rq=$('#recQ');if(rq)rq.oninput=()=>{recQ=rq.value;renderRest();setTimeout(()=>{const x=$('#recQ');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},20)};
   act('newRecipe',()=>{const r={id:uid(),name:'Nueva receta',cat:curCat!=='all'&&curCat!=='none'?curCat:(R.categories[0]?.id||null),portions:1,price:0,error:null,target:null,items:[]};R.recipes.push(r);saveR(curR.id);openRecipe(r.id)});
   act('addIng',()=>{const id=uid();R.ingredients.push({id,name:'',unit:'g',pack:1000,price:0,yield:100});mpF='all';mpQ='';saveR(curR.id);renderRest();setTimeout(()=>{const el=$(`#rBody tr[data-ing="${id}"] [data-f="name"]`);if(el){el.scrollIntoView({block:'center'});el.focus()}},60)});
@@ -678,15 +679,29 @@ function bindRest(R){
 }
 function openCats(R){
   const P=$('#genPane');const draw=()=>{P.innerHTML=`<h2>Categorías de ${esc(curR.name)}</h2><span class="muted small">Ordénalas como van en la carta.</span>
-   <div class="stack">${R.categories.map((c,i)=>`<div class="rowx"><input class="in" data-cn="${c.id}" value="${esc(c.name)}" style="flex:1"><button class="x" data-up="${i}" aria-label="Subir">▲</button><button class="x" data-dc="${c.id}" aria-label="Eliminar">✕</button></div>`).join('')||'<span class="muted">Sin categorías todavía.</span>'}</div>
+   <div class="stack">${R.categories.map((c,i)=>`<div class="rowx"><input class="in" data-cn="${c.id}" value="${esc(c.name)}" style="flex:1"><button class="x" data-up="${i}" aria-label="Subir" ${i===0?'disabled':''}>▲</button><button class="x" data-down="${i}" aria-label="Bajar" ${i===R.categories.length-1?'disabled':''}>▼</button><button class="x" data-dc="${c.id}" aria-label="Eliminar">✕</button></div>`).join('')||'<span class="muted">Sin categorías todavía.</span>'}</div>
    <form class="rowx" id="catForm"><input class="in" id="catNew" placeholder="Nueva categoría, ej: Hamburguesas" style="flex:1"><button class="btn">Añadir</button></form>
    <div class="rowx"><span class="sp"></span><button class="btn ghost" id="catDone">Listo</button></div>`;
    P.querySelectorAll('[data-cn]').forEach(i=>i.onchange=()=>{R.categories.find(c=>c.id===i.dataset.cn).name=i.value.trim()||'Sin nombre';saveR(curR.id)});
    P.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const i=+b.dataset.up;if(i>0){[R.categories[i-1],R.categories[i]]=[R.categories[i],R.categories[i-1]];saveR(curR.id);draw()}});
+   P.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>{const i=+b.dataset.down;if(i<R.categories.length-1){[R.categories[i+1],R.categories[i]]=[R.categories[i],R.categories[i+1]];saveR(curR.id);draw()}});
    P.querySelectorAll('[data-dc]').forEach(b=>b.onclick=()=>{R.categories=R.categories.filter(c=>c.id!==b.dataset.dc);R.recipes.forEach(r=>{if(r.cat===b.dataset.dc)r.cat=null});saveR(curR.id);draw()});
    $('#catForm').onsubmit=e=>{e.preventDefault();const v=$('#catNew').value.trim();if(!v)return;R.categories.push({id:uid(),name:v});saveR(curR.id);draw();$('#catNew').focus()};
    $('#catDone').onclick=()=>{$('#genSheet').hidden=true;renderRest()}};
   draw();$('#genSheet').hidden=false;
+}
+function openRecipeOrder(R){
+  const P=$('#genPane');let selected=curCat==='all'?'':curCat;
+  const draw=()=>{const items=R.recipes.filter(r=>selected?(selected==='__none__'?!R.categories.some(c=>c.id===r.cat):r.cat===selected):true);
+    P.innerHTML=`<h2>Ordenar recetas de ${esc(curR.name)}</h2><span class="muted small">Usa las flechas para cambiar el orden. Se guarda automáticamente.</span>
+    <div class="field"><label for="orderCat">Categoría</label><select class="in" id="orderCat"><option value="">Todas las recetas</option>${R.categories.map(c=>`<option value="${c.id}" ${selected===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}<option value="__none__" ${selected==='__none__'?'selected':''}>Sin categoría</option></select></div>
+    <div class="stack">${items.map((r,i)=>`<div class="rowx card" style="padding:8px 10px"><span class="num muted" style="width:28px">${i+1}.</span><b style="flex:1">${esc(r.name)}</b><button class="x" data-rup="${r.id}" aria-label="Subir" ${i===0?'disabled':''}>▲</button><button class="x" data-rdown="${r.id}" aria-label="Bajar" ${i===items.length-1?'disabled':''}>▼</button></div>`).join('')||'<span class="muted">No hay recetas en esta categoría.</span>'}</div>
+    <div class="rowx"><span class="sp"></span><button class="btn ghost" id="recipeOrderDone">Listo</button></div>`;
+    $('#orderCat').onchange=e=>{selected=e.target.value;draw()};
+    const move=(id,delta)=>{const peers=R.recipes.filter(r=>selected?(selected==='__none__'?!R.categories.some(c=>c.id===r.cat):r.cat===selected):true),p=peers.findIndex(r=>r.id===id),q=p+delta;if(p<0||q<0||q>=peers.length)return;const a=R.recipes.indexOf(peers[p]),b=R.recipes.indexOf(peers[q]);[R.recipes[a],R.recipes[b]]=[R.recipes[b],R.recipes[a]];saveR(curR.id);draw()};
+    P.querySelectorAll('[data-rup]').forEach(b=>b.onclick=()=>move(b.dataset.rup,-1));P.querySelectorAll('[data-rdown]').forEach(b=>b.onclick=()=>move(b.dataset.rdown,1));
+    $('#recipeOrderDone').onclick=()=>{$('#genSheet').hidden=true;renderRest()};
+  };draw();$('#genSheet').hidden=false;
 }
 $('#genSheet').onclick=e=>{if(e.target.id==='genSheet'){$('#genSheet').hidden=true;const c=$$('.screen').find(s=>!s.hidden)?.id;if(c==='rest')renderRest()}};
 
@@ -1241,6 +1256,8 @@ async function migrateMiradorData(){
   const berries=setIng('ifdw52oj','Arandanos',125,5900),straw=setIng('ah19arr2','Fresa',480,5600,'g',95),sugar=R.ingredients.find(i=>i.id==='k09jxkuo')||R.ingredients.find(i=>norm(i.name)==='azucar blanca');
   const jamIng=setIng('axumxp70','Mermelada',695,12128);
   R.ingredients.filter(i=>norm(i.name)==='sirope').forEach(i=>{i.name='Almíbar';changed=true});
+  const syrups=R.ingredients.filter(i=>norm(i.name)==='almibar');
+  if(syrups.length>1){const canonical=syrups.find(i=>i.id==='lk1ksgma')||syrups[0];for(const duplicate of syrups){if(duplicate===canonical)continue;R.recipes.forEach(rec=>rec.items.forEach(it=>{if(it.ing===duplicate.id)it.ing=canonical.id}));R.ingredients=R.ingredients.filter(i=>i.id!==duplicate.id);changed=true}canonical.name='Almíbar'}
   let cat=R.categories.find(c=>norm(c.name)==='subrecetas');if(!cat){cat={id:'eidc2guq',name:'Subrecetas'};R.categories.push(cat);changed=true}
   let rec=R.recipes.find(x=>x.id==='mrmld695'||norm(x.name)==='mermelada');if(!rec){rec={id:'mrmld695',name:'Mermelada',cat:cat.id,items:[],portions:1,price:0,error:null,target:null};R.recipes.push(rec);changed=true}
   if(sugar&&(!rec.items||!rec.items.length)){rec.items=[{ing:berries.id,qty:125},{ing:straw.id,qty:480},{ing:sugar.id,qty:90}];rec.cat=cat.id;rec.portions=1;changed=true}
