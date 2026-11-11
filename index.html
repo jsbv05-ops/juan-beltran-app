@@ -134,6 +134,13 @@ button{cursor:pointer;border:0;background:none;padding:0}
 .in{width:100%;padding:9px 11px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);min-width:0}
 .in:focus{border-color:var(--sel);outline:none}
 textarea.in{resize:vertical;min-height:70px}
+.add-picker{position:relative;flex:1;min-width:220px;max-width:460px}
+.add-picker .in{width:100%}
+.add-results{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:25;max-height:300px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:5px}
+.add-results[hidden]{display:none}
+.add-results button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:9px 10px;border-radius:8px;text-align:left}
+.add-results button:hover{background:var(--panel-2)}
+.add-results small{display:block;color:var(--muted);font-size:11px}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 @media(max-width:440px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -339,7 +346,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.5</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.6</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -576,15 +583,25 @@ $('#cYes').onclick=async()=>{const id=cardEdit.id;S.meta.restaurants=S.meta.rest
 
 /* ---------- costos de recetas ---------- */
 const unitCost=i=>{const q=nd(i.pack)*(nd(i.yield||100)/100);return q>0?nd(i.price)/q:0};
+const recipeById=(R,id)=>R.recipes.find(r=>r.id===id);
+function recipeDependsOn(fromId,targetId,R,seen=new Set()){
+  if(fromId===targetId)return true;if(seen.has(fromId))return false;seen.add(fromId);const from=recipeById(R,fromId);if(!from)return false;
+  return(from.items||[]).some(it=>{if(it.type==='ingredient'||R.ingredients.some(i=>i.id===it.ing))return false;const sub=recipeById(R,it.ing);return sub?recipeDependsOn(sub.id,targetId,R,seen):false});
+}
+function recipeCostPerPortion(rec,R,path=new Set()){
+  if(!rec||path.has(rec.id))return 0;const next=new Set(path);next.add(rec.id);const ings=Object.fromEntries(R.ingredients.map(i=>[i.id,i]));
+  const base=(rec.items||[]).reduce((sum,it)=>{const ing=ings[it.ing];if(ing)return sum+unitCost(ing)*nd(it.qty);const sub=recipeById(R,it.ing);return sum+(sub?recipeCostPerPortion(sub,R,next)*nd(it.qty):0)},0);
+  return base*(1+nd(rec.error??R.settings.error)/100)/Math.max(nd(rec.portions)||1,1);
+}
 function calc(rec,R){
   const ings=Object.fromEntries(R.ingredients.map(i=>[i.id,i]));
-  const lines=(rec.items||[]).map(it=>{const ing=ings[it.ing];const uc=ing?unitCost(ing):0;return{it,ing,uc,cost:uc*nd(it.qty)}});
+  const lines=(rec.items||[]).map(it=>{const mp=ings[it.ing],sub=!mp&&(it.type==='recipe'||recipeById(R,it.ing)),subRec=sub?recipeById(R,it.ing):null,uc=mp?unitCost(mp):subRec?recipeCostPerPortion(subRec,R,new Set([rec.id])):0,ing=mp|| (subRec?{id:subRec.id,name:subRec.name,unit:'porción',price:uc,pack:1,yield:100,subrecipe:true}:null);return{it,ing,uc,cost:uc*nd(it.qty),subrecipe:!!subRec}});
   const base=lines.reduce((a,l)=>a+l.cost,0);const err=nd(rec.error??R.settings.error)/100;const total=base*(1+err);
   const portions=Math.max(nd(rec.portions)||1,1);const per=total/portions;const price=nd(rec.price);
   const target=nd(rec.target??R.settings.target)/100;const opex=nd(rec.opex??R.settings.opex??0)/100;const opexAmt=price*opex;
   const gross=price-per;const net=gross-opexAmt;const margin=price>0?net/price:0;const grossMargin=price>0?gross/price:0;const foodCost=price>0?per/price:0;
   lines.forEach(l=>l.share=base>0?l.cost/base:0);
-  const missing=lines.filter(l=>!l.ing||!(nd(l.ing.price)>0)).map(l=>l.ing?.name||'Ingrediente eliminado');
+  const missing=lines.filter(l=>!l.ing||(!l.subrecipe&&!(nd(l.ing.price)>0))).map(l=>l.ing?.name||'Ingrediente eliminado');
   const den=1-target-opex;
   return{lines,base,err,total,portions,perPortion:per,price,margin,grossMargin,foodCost,opex,opexAmt,net,netTotal:net*portions,contrib:opexAmt,contribTotal:opexAmt*portions,target,suggested:den>0?per/den:0,missing};
 }
@@ -605,11 +622,11 @@ function renderRest(){
 }
 function recipesView(R){
   const q=norm(recQ);const list=R.recipes.filter(r=>(curCat==='all'||(curCat==='none'?!R.categories.some(c=>c.id===r.cat):r.cat===curCat))&&(!q||norm(r.name).includes(q)||norm(catName(R,r.cat)).includes(q)));
-  const sum=R.recipes.map(r=>calc(r,R));const avgM=sum.length?sum.reduce((a,c)=>a+c.margin,0)/sum.length:0;
+  const isSubCategory=curCat!=='all'&&curCat!=='none'&&norm(catName(R,curCat))==='subrecetas';const sum=R.recipes.map(r=>calc(r,R));const avgM=sum.length?sum.reduce((a,c)=>a+c.margin,0)/sum.length:0;
   const groups=curCat==='all'?[...R.categories.map(c=>({c,items:list.filter(r=>r.cat===c.id)})),{c:{id:'none',name:'Sin categoría'},items:list.filter(r=>!R.categories.some(c=>c.id===r.cat))}].filter(g=>g.items.length):[{c:null,items:list}];
-  const card=r=>{const c=calc(r,R);return `<button class="rc" data-open="${r.id}">${r.example?'<span class="ex">Ejemplo</span>':''}<h3>${esc(r.name)}</h3><span class="muted small">${c.portions} porción${c.portions>1?'es':''} · ${r.items.length} ingredientes</span><div class="k3"><div><small>Costo/porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Precio</small><b class="num">${money(c.price)}</b></div><div><small>Ganancia</small><b>${mchip(c.margin,c.target)}</b></div></div>${!r.items.length?`<span class="miss">⚠ Sin ingredientes: falta la receta</span>`:c.missing.length?`<span class="miss">⚠ Falta precio de ${c.missing.length} ingrediente${c.missing.length>1?'s':''}</span>`:''}</button>`};
+  const card=r=>{const c=calc(r,R),sub=norm(catName(R,r.cat))==='subrecetas';return `<button class="rc" data-open="${r.id}">${r.example?'<span class="ex">Ejemplo</span>':''}<h3>${esc(r.name)}</h3><span class="muted small">${c.portions} porción${c.portions>1?'es':''} · ${r.items.length} ingredientes</span>${sub?`<div class="k3" style="grid-template-columns:1fr"><div><small>Costo por porción</small><b class="num">${money(c.perPortion)}</b></div></div>`:`<div class="k3"><div><small>Costo/porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Precio</small><b class="num">${money(c.price)}</b></div><div><small>Ganancia</small><b>${mchip(c.margin,c.target)}</b></div></div>`}${!r.items.length?`<span class="miss">⚠ Sin ingredientes: falta la receta</span>`:c.missing.length?`<span class="miss">⚠ Falta precio de ${c.missing.length} ingrediente${c.missing.length>1?'s':''}</span>`:''}</button>`};
   return `<div class="stack">
-  <div class="kpis"><div class="kpi hl"><small>Recetas</small><b class="num">${R.recipes.length}</b></div><div class="kpi"><small>Margen promedio</small><b class="num">${pct(avgM)}</b></div><div class="kpi"><small>Categorías</small><b class="num">${R.categories.length}</b></div><div class="kpi"><small>Materias primas</small><b class="num">${R.ingredients.length}</b></div></div>
+  <div class="kpis"><div class="kpi hl"><small>Recetas</small><b class="num">${R.recipes.length}</b></div>${isSubCategory?'':`<div class="kpi"><small>Margen promedio</small><b class="num">${pct(avgM)}</b></div>`}<div class="kpi"><small>Categorías</small><b class="num">${R.categories.length}</b></div><div class="kpi"><small>Materias primas</small><b class="num">${R.ingredients.length}</b></div></div>
   <div class="tabs" style="padding-top:0"><button class="tab" data-cat="all" aria-selected="${curCat==='all'}">Todas</button>${R.categories.map(c=>`<button class="tab" data-cat="${c.id}" aria-selected="${curCat===c.id}">${esc(c.name)}</button>`).join('')}<button class="tab" data-act="cats">✎ Categorías</button></div>
   <div class="rowx"><input class="in" id="recQ" type="search" placeholder="🔍 Buscar receta…" value="${esc(recQ)}" style="flex:1;min-width:160px;border-radius:999px"><button class="btn ghost" data-act="orderRecipes">↕ Ordenar recetas</button><button class="btn" data-act="newRecipe">+ Nueva receta</button></div>
   ${q?`<span class="muted small">${list.length} resultado(s) para “${esc(recQ)}”</span>`:''}
@@ -710,31 +727,35 @@ let curRec=null;
 function openRecipe(id){curRec=S.r[curR.id].recipes.find(r=>r.id===id);go('recipe');renderRecipe()}
 function missHTML(c){if(!c.lines.length)return `<div class="missbox">⚠ <b>Esta receta todavía no tiene ingredientes.</b> Agrégalos abajo con “Añadir de materia prima”; si el producto no existe, créalo primero en Materia prima.</div>`;return c.missing.length?`<div class="missbox">⚠ <b>Falta precio:</b> ${[...new Set(c.missing)].map(esc).join(', ')}. El costo de esta receta sale más bajo de lo real hasta que los completes en Materia prima.</div>`:''}
 function renderRecipe(){
-  const R=S.r[curR.id],r=curRec,c=calc(r,R);$('#reTitle').textContent=r.name||'Receta';
+  const R=S.r[curR.id],r=curRec,c=calc(r,R),isSubrecipe=norm(catName(R,r.cat))==='subrecetas';$('#reTitle').textContent=r.name||'Receta';
   $('#reBody').innerHTML=`<div class="stack">
    ${r.example?'<span class="ex">Receta de ejemplo: cámbiala o elimínala</span>':''}
    <div class="grid3"><div class="field span2"><label for="fName">Nombre</label><input class="in" id="fName" value="${esc(r.name)}"></div><div class="field"><label for="fCat">Categoría</label><select class="in" id="fCat"><option value="">Sin categoría</option>${R.categories.map(k=>`<option value="${k.id}" ${k.id===r.cat?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>
-   <div class="field"><label for="fPor">Porciones que rinde</label><input class="in num" id="fPor" inputmode="decimal" value="${r.portions}"></div><div class="field"><label for="fPrice">Precio de venta por porción</label><input class="in num" id="fPrice" inputmode="numeric" value="${r.price}"></div><div class="field"><label for="fErr">Margen de error %</label><input class="in num" id="fErr" inputmode="decimal" value="${r.error??''}" placeholder="${R.settings.error} (general)"></div><div class="field"><label for="fTar">Margen de ganancia %</label><input class="in num" id="fTar" inputmode="decimal" value="${r.target??''}" placeholder="${R.settings.target} (general)"></div><div class="field"><label for="fOpx">Aporte a gastos operativos %</label><input class="in num" id="fOpx" inputmode="decimal" value="${r.opex??''}" placeholder="${R.settings.opex??0} (general)"></div></div>
+   <div class="field"><label for="fPor">Porciones que rinde</label><input class="in num" id="fPor" inputmode="decimal" value="${r.portions}"></div>${isSubrecipe?'':`<div class="field"><label for="fPrice">Precio de venta por porción</label><input class="in num" id="fPrice" inputmode="numeric" value="${r.price}"></div>`}<div class="field"><label for="fErr">Margen de error %</label><input class="in num" id="fErr" inputmode="decimal" value="${r.error??''}" placeholder="${R.settings.error} (general)"></div>${isSubrecipe?'':`<div class="field"><label for="fTar">Margen de ganancia %</label><input class="in num" id="fTar" inputmode="decimal" value="${r.target??''}" placeholder="${R.settings.target} (general)"></div><div class="field"><label for="fOpx">Aporte a gastos operativos %</label><input class="in num" id="fOpx" inputmode="decimal" value="${r.opex??''}" placeholder="${R.settings.opex??0} (general)"></div>`}</div>
    <div id="missBox">${missHTML(c)}</div>
    <div class="kpis">
     <div class="kpi"><small>Costo ingredientes</small><b class="num" data-o="base">${money(c.base)}</b></div><div class="kpi"><small>+ Margen de error (<span data-o="err">${pct(c.err)}</span>)</small><b class="num" data-o="total">${money(c.total)}</b></div>
-    <div class="kpi"><small>Costo por porción</small><b class="num" data-o="perPortion">${money(c.perPortion)}</b></div><div class="kpi"><small>Food cost</small><b class="num" data-o="foodCost">${pct(c.foodCost)}</b></div>
+    <div class="kpi"><small>Costo por porción</small><b class="num" data-o="perPortion">${money(c.perPortion)}</b></div>${isSubrecipe?'':`<div class="kpi"><small>Food cost</small><b class="num" data-o="foodCost">${pct(c.foodCost)}</b></div>
     <div class="kpi"><small>Aporte a gastos operativos (<span data-o="opex">${pct(c.opex)}</span>) / porción</small><b class="num" data-o="contrib">${money(c.opexAmt)}</b></div>
     <div class="kpi"><small>Ganancia / porción</small><b class="num" data-o="net">${money(c.net)}</b></div><div class="kpi hl"><small>Margen de ganancia</small><b class="num" data-o="margin">${pct(c.margin)}</b></div>
-    <div class="kpi"><small>Ganancia por tanda (<span data-o="portions">${c.portions}</span>)</small><b class="num" data-o="netTotal">${money(c.netTotal)}</b></div><div class="kpi"><small>Precio sugerido (ganancia <span data-o="target">${pct(c.target)}</span> + gastos <span data-o="opex">${pct(c.opex)}</span>)</small><b class="num" data-o="suggested">${money(c.suggested)}</b> <button class="btn sm ghost" id="useSug" style="margin-top:6px">Usar</button></div></div>
-   <div class="rowx"><h2 class="sec">Ingredientes</h2><span class="sp"></span><select class="in" id="addSel" style="width:auto;max-width:62%"><option value="">+ Añadir de materia prima…</option>${R.ingredients.map(i=>`<option value="${i.id}">${esc(i.name||'(sin nombre)')} · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}${nd(i.price)>0?'':' · ⚠ sin precio'}</option>`).join('')}</select></div>
+    <div class="kpi"><small>Ganancia por tanda (<span data-o="portions">${c.portions}</span>)</small><b class="num" data-o="netTotal">${money(c.netTotal)}</b></div><div class="kpi"><small>Precio sugerido (ganancia <span data-o="target">${pct(c.target)}</span> + gastos <span data-o="opex">${pct(c.opex)}</span>)</small><b class="num" data-o="suggested">${money(c.suggested)}</b> <button class="btn sm ghost" id="useSug" style="margin-top:6px">Usar</button></div>`}</div>
+   <div class="rowx"><h2 class="sec">Ingredientes y subrecetas</h2><span class="sp"></span><div class="add-picker"><input class="in" id="addSearch" type="search" placeholder="🔍 Buscar materia prima o subreceta…" autocomplete="off"><div class="add-results" id="addResults" hidden></div></div></div>
    <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo/unidad</th><th>Costo en receta</th><th>% participación</th><th></th></tr></thead><tbody>
-   ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${qShow(l.ing,l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(uShow(l.ing))}</td><td class="num">${money(ucShow(l.ing,l.uc))}${l.ing&&nd(l.ing.price)>0?'':' <span class="miss-dot" title="Sin precio">⚠</span>'}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
+   ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}${l.subrecipe?' · Subreceta':''}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${qShow(l.ing,l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(uShow(l.ing))}</td><td class="num">${money(ucShow(l.ing,l.uc))}${!l.subrecipe&&(!l.ing||nd(l.ing.price)<=0)?' <span class="miss-dot" title="Sin precio">⚠</span>':''}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
    <tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num"><b data-o="base">${money(c.base)}</b></td><td class="num">100%</td><td></td></tr></tbody></table></div>
    <div class="rowx"><button class="btn ghost" id="dupRec">Duplicar receta</button><span class="sp"></span><button class="btn danger" id="delRec">Eliminar receta</button></div></div>`;
   const sv=()=>saveR(curR.id);
   const RB=$('#reBody');const refresh=()=>{const c2=calc(r,R);const set=(k,v)=>RB.querySelectorAll(`[data-o="${k}"]`).forEach(e=>e.textContent=v);
     ['base','total','perPortion','contrib','net','netTotal','suggested'].forEach(k=>set(k,money(c2[k])));['foodCost','margin','err','target','opex'].forEach(k=>set(k,pct(c2[k])));set('portions',c2.portions);const mb=$('#missBox');if(mb)mb.innerHTML=missHTML(c2);
     c2.lines.forEach((l,k)=>{const q=x=>RB.querySelector(x);const lc=q(`[data-lc="${k}"]`),ls=q(`[data-ls="${k}"]`),lb=q(`[data-lb="${k}"]`);if(lc)lc.textContent=money(l.cost);if(ls)ls.textContent=pct(l.share);if(lb)lb.style.width=(l.share*100).toFixed(1)+'%'})};
-  const bind=(id,f,kind='',nullable=false)=>{const el=$(id);const upd=()=>{const v=el.value;r[f]=nullable&&v===''?null:(kind==='money'?pm(v):kind?nd(v):(v||null));sv();refresh();if(f==='name')$('#reTitle').textContent=r.name||'Receta'};if(el.tagName==='SELECT')el.onchange=upd;else{el.oninput=upd;el.onchange=upd}};
-  bind('#fName','name');bind('#fCat','cat');bind('#fPor','portions','n');bind('#fPrice','price','money');bind('#fErr','error','n',true);bind('#fTar','target','n',true);bind('#fOpx','opex','n',true);
-  $('#useSug').onclick=()=>{r.price=Math.ceil(c.suggested/100)*100;sv();renderRecipe()};
-  $('#addSel').onchange=e=>{if(!e.target.value)return;r.items.push({ing:e.target.value,qty:0});sv();renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},30)};
+  const bind=(id,f,kind='',nullable=false)=>{const el=$(id);const upd=()=>{const v=el.value;r[f]=nullable&&v===''?null:(kind==='money'?pm(v):kind?nd(v):(v||null));sv();if(f==='cat'){renderRecipe();return}refresh();if(f==='name')$('#reTitle').textContent=r.name||'Receta'};if(el.tagName==='SELECT')el.onchange=upd;else{el.oninput=upd;el.onchange=upd}};
+  bind('#fName','name');bind('#fCat','cat');bind('#fPor','portions','n');bind('#fErr','error','n',true);if(!isSubrecipe){bind('#fPrice','price','money');bind('#fTar','target','n',true);bind('#fOpx','opex','n',true);$('#useSug').onclick=()=>{r.price=Math.ceil(c.suggested/100)*100;sv();renderRecipe()}}
+  const addResults=$('#addResults'),addSearch=$('#addSearch');
+  const paintsAddResults=()=>{const q=norm(addSearch.value),mp=R.ingredients.filter(i=>!q||norm(i.name).includes(q)).slice(0,80),subs=R.recipes.filter(x=>norm(catName(R,x.cat))==='subrecetas'&&x.id!==r.id&&!recipeDependsOn(x.id,r.id,R)&&(!q||norm(x.name).includes(q))).slice(0,80);
+    addResults.innerHTML=[...mp.map(i=>`<button type="button" data-add-type="ingredient" data-add-id="${i.id}"><span>${esc(i.name||'(sin nombre)')}<small>Materia prima · ${esc(uShow(i))}${nd(i.price)>0?` · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}`:' · sin precio'}</small></span></button>`),...subs.map(x=>`<button type="button" data-add-type="recipe" data-add-id="${x.id}"><span>${esc(x.name)}<small>Subreceta · ${money(recipeCostPerPortion(x,R))}/porción</small></span></button>`)].join('')||'<div class="muted small" style="padding:10px">No hay coincidencias.</div>';addResults.hidden=false;
+    addResults.querySelectorAll('[data-add-id]').forEach(b=>b.onclick=()=>{const type=b.dataset.addType,id=b.dataset.addId;if(type==='recipe'&&recipeDependsOn(id,r.id,R))return toast('Esa subreceta depende de esta receta y crearía un ciclo');r.items.push({ing:id,qty:0,type});sv();addSearch.value='';addResults.hidden=true;renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},30)});
+  };
+  addSearch.onfocus=paintsAddResults;addSearch.oninput=paintsAddResults;addSearch.onkeydown=e=>{if(e.key==='Escape')addResults.hidden=true};addSearch.onblur=()=>setTimeout(()=>{if(!addResults.contains(document.activeElement))addResults.hidden=true},120);
   $$('[data-q]').forEach(i=>{i.oninput=()=>{const it=r.items[+i.dataset.q];const ing=R.ingredients.find(x=>x.id===it.ing);it.qty=isOz(ing)?+(nd(i.value)*OZ).toFixed(3):nd(i.value);sv();refresh()};i.onchange=i.oninput});
   $$('[data-rm]').forEach(b=>b.onclick=()=>{r.items.splice(+b.dataset.rm,1);sv();renderRecipe()});
   $('#dupRec').onclick=()=>{const cp=JSON.parse(JSON.stringify(r));cp.id=uid();cp.name=r.name+' (copia)';delete cp.example;R.recipes.push(cp);sv();curRec=cp;renderRecipe();toast('Receta duplicada')};
@@ -764,7 +785,7 @@ function exportRecipes(R,ids){
 }
 async function exportRecipePng(R,r){
   if(document.fonts?.ready)await document.fonts.ready;
-  const lines=(r.items||[]).map(it=>{const ing=R.ingredients.find(x=>x.id===it.ing);let qty=nd(it.qty),unit=ing?.unit||'';if(unit.toLowerCase()==='ml'){qty=qty/30;unit='oz'}return{name:ing?.name||'Ingrediente eliminado',amount:`${Number(qty.toFixed(2))} ${unit}`.trim()}});
+  const lines=(r.items||[]).map(it=>{const ing=R.ingredients.find(x=>x.id===it.ing),sub=!ing&&it.type==='recipe'?recipeById(R,it.ing):null;let qty=nd(it.qty),unit=ing?.unit|| (sub?'porción':'');if(unit.toLowerCase()==='ml'){qty=qty/30;unit='oz'}return{name:ing?.name||sub?.name||'Ingrediente eliminado',amount:`${Number(qty.toFixed(2))} ${unit}`.trim()}});
   const w=1080,pad=80,rowH=92,headH=210,foot=80,h=headH+lines.length*rowH+foot,canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const c=canvas.getContext('2d');
   c.fillStyle='#F3EBDD';c.fillRect(0,0,w,h);c.fillStyle='#173C32';c.fillRect(0,0,w,18);c.fillStyle='#0E0E0C';c.font='700 52px "M PLUS Rounded 1c",sans-serif';c.fillText(r.name||'Receta',pad,105,w-pad*2);c.fillStyle='#B8913A';c.fillRect(pad,145,w-pad*2,4);
   c.font='700 25px "M PLUS Rounded 1c",sans-serif';c.fillStyle='#173C32';c.fillText('INGREDIENTE',pad,194);c.textAlign='right';c.fillText('CANTIDAD',w-pad,194);c.textAlign='left';
