@@ -134,13 +134,15 @@ button{cursor:pointer;border:0;background:none;padding:0}
 .in{width:100%;padding:9px 11px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);min-width:0}
 .in:focus{border-color:var(--sel);outline:none}
 textarea.in{resize:vertical;min-height:70px}
-.add-picker{position:relative;flex:1;min-width:220px;max-width:460px}
+.add-picker{position:relative;flex:1;min-width:220px;max-width:100%}
 .add-picker .in{width:100%}
+.add-search-icon{position:absolute;left:13px;top:9px;z-index:1;pointer-events:none;font-size:18px;color:var(--muted)}
 .add-results{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:25;max-height:300px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:5px}
 .add-results[hidden]{display:none}
 .add-results button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:9px 10px;border-radius:8px;text-align:left}
 .add-results button:hover{background:var(--panel-2)}
 .add-results small{display:block;color:var(--muted);font-size:11px}
+.add-results .add-action{font-size:11px;white-space:nowrap;color:var(--shop)}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 @media(max-width:440px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -346,7 +348,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.6</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.7</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -608,6 +610,7 @@ function calc(rec,R){
 const OZ=30;const isOz=ing=>ing&&ing.unit==='ml'&&S.meta.settings.oz!==false;const qShow=(ing,q)=>isOz(ing)?+(nd(q)/OZ).toFixed(2):nd(q);const uShow=ing=>isOz(ing)?'oz':(ing?.unit||'');const ucShow=(ing,uc)=>isOz(ing)?uc*OZ:uc;
 const mchip=(m,t)=>`<span class="chip ${m>=t?'good':m>=t-0.1?'warn':'bad'}">${pct(m)}</span>`;
 const catName=(R,id)=>R.categories.find(c=>c.id===id)?.name||'Sin categoría';
+const isSubrecipeRecipe=(R,r)=>norm(catName(R,r?.cat))==='subrecetas';
 
 /* ---------- restaurante ---------- */
 let curR=null,curTab='recipes',curCat='all',recQ='';
@@ -624,7 +627,7 @@ function recipesView(R){
   const q=norm(recQ);const list=R.recipes.filter(r=>(curCat==='all'||(curCat==='none'?!R.categories.some(c=>c.id===r.cat):r.cat===curCat))&&(!q||norm(r.name).includes(q)||norm(catName(R,r.cat)).includes(q)));
   const isSubCategory=curCat!=='all'&&curCat!=='none'&&norm(catName(R,curCat))==='subrecetas';const sum=R.recipes.map(r=>calc(r,R));const avgM=sum.length?sum.reduce((a,c)=>a+c.margin,0)/sum.length:0;
   const groups=curCat==='all'?[...R.categories.map(c=>({c,items:list.filter(r=>r.cat===c.id)})),{c:{id:'none',name:'Sin categoría'},items:list.filter(r=>!R.categories.some(c=>c.id===r.cat))}].filter(g=>g.items.length):[{c:null,items:list}];
-  const card=r=>{const c=calc(r,R),sub=norm(catName(R,r.cat))==='subrecetas';return `<button class="rc" data-open="${r.id}">${r.example?'<span class="ex">Ejemplo</span>':''}<h3>${esc(r.name)}</h3><span class="muted small">${c.portions} porción${c.portions>1?'es':''} · ${r.items.length} ingredientes</span>${sub?`<div class="k3" style="grid-template-columns:1fr"><div><small>Costo por porción</small><b class="num">${money(c.perPortion)}</b></div></div>`:`<div class="k3"><div><small>Costo/porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Precio</small><b class="num">${money(c.price)}</b></div><div><small>Ganancia</small><b>${mchip(c.margin,c.target)}</b></div></div>`}${!r.items.length?`<span class="miss">⚠ Sin ingredientes: falta la receta</span>`:c.missing.length?`<span class="miss">⚠ Falta precio de ${c.missing.length} ingrediente${c.missing.length>1?'s':''}</span>`:''}</button>`};
+  const card=r=>{const c=calc(r,R),sub=isSubrecipeRecipe(R,r);return `<button class="rc" data-open="${r.id}">${r.example?'<span class="ex">Ejemplo</span>':''}<h3>${esc(r.name)}</h3><span class="muted small">${c.portions} porción${c.portions>1?'es':''} · ${r.items.length} ingredientes</span>${sub?`<div class="k3" style="grid-template-columns:1fr 1fr"><div><small>Costo por porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Margen de error</small><b class="num">${pct(c.err)}</b></div></div>`:`<div class="k3"><div><small>Costo/porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Precio</small><b class="num">${money(c.price)}</b></div><div><small>Ganancia</small><b>${mchip(c.margin,c.target)}</b></div></div>`}${!r.items.length?`<span class="miss">⚠ Sin ingredientes: falta la receta</span>`:c.missing.length?`<span class="miss">⚠ Falta precio de ${c.missing.length} ingrediente${c.missing.length>1?'s':''}</span>`:''}</button>`};
   return `<div class="stack">
   <div class="kpis"><div class="kpi hl"><small>Recetas</small><b class="num">${R.recipes.length}</b></div>${isSubCategory?'':`<div class="kpi"><small>Margen promedio</small><b class="num">${pct(avgM)}</b></div>`}<div class="kpi"><small>Categorías</small><b class="num">${R.categories.length}</b></div><div class="kpi"><small>Materias primas</small><b class="num">${R.ingredients.length}</b></div></div>
   <div class="tabs" style="padding-top:0"><button class="tab" data-cat="all" aria-selected="${curCat==='all'}">Todas</button>${R.categories.map(c=>`<button class="tab" data-cat="${c.id}" aria-selected="${curCat===c.id}">${esc(c.name)}</button>`).join('')}<button class="tab" data-act="cats">✎ Categorías</button></div>
@@ -689,7 +692,7 @@ function bindRest(R){
   act('saveDefaults',()=>{R.settings.error=nd($('#gErr').value);R.settings.target=nd($('#gTar').value);R.settings.opex=nd($('#gOpx').value);saveR(curR.id);toast('Valores guardados')});
   act('applyAll',()=>{const sc=$('#gScope').value,e=$('#gAllErr').value,t=$('#gAllTar').value,ox=$('#gAllOpx').value,p=$('#gPrice').value,m=$('#gMp').value,sg=$('#gSuggest').checked;
     if(m!=='')R.ingredients.forEach(i=>i.price=Math.round(nd(i.price)*(1+nd(m)/100)));
-    R.recipes.filter(r=>sc==='all'||r.cat===sc).forEach(r=>{if(e!=='')r.error=nd(e);if(t!=='')r.target=nd(t);if(ox!=='')r.opex=nd(ox);if(p!=='')r.price=Math.round(nd(r.price)*(1+nd(p)/100));if(sg)r.price=Math.ceil(calc(r,R).suggested/100)*100});
+    R.recipes.filter(r=>sc==='all'||r.cat===sc).forEach(r=>{const sub=isSubrecipeRecipe(R,r);if(e!=='')r.error=nd(e);if(!sub){if(t!=='')r.target=nd(t);if(ox!=='')r.opex=nd(ox);if(p!=='')r.price=Math.round(nd(r.price)*(1+nd(p)/100));if(sg)r.price=Math.ceil(calc(r,R).suggested/100)*100}});
     if([e,t,ox,p,m].every(x=>x==='')&&!sg)return toast('No escribiste ningún cambio');saveR(curR.id);toast('Cambios aplicados');renderRest()});
   const all=$('#exAll');if(all)all.onchange=()=>B.querySelectorAll('[data-ex]').forEach(x=>x.checked=all.checked);
   act('doExport',()=>{const ids=[...B.querySelectorAll('[data-ex]:checked')].map(x=>x.dataset.ex);if(!ids.length)return toast('Elige al menos una receta');exportRecipes(R,ids)});
@@ -727,7 +730,7 @@ let curRec=null;
 function openRecipe(id){curRec=S.r[curR.id].recipes.find(r=>r.id===id);go('recipe');renderRecipe()}
 function missHTML(c){if(!c.lines.length)return `<div class="missbox">⚠ <b>Esta receta todavía no tiene ingredientes.</b> Agrégalos abajo con “Añadir de materia prima”; si el producto no existe, créalo primero en Materia prima.</div>`;return c.missing.length?`<div class="missbox">⚠ <b>Falta precio:</b> ${[...new Set(c.missing)].map(esc).join(', ')}. El costo de esta receta sale más bajo de lo real hasta que los completes en Materia prima.</div>`:''}
 function renderRecipe(){
-  const R=S.r[curR.id],r=curRec,c=calc(r,R),isSubrecipe=norm(catName(R,r.cat))==='subrecetas';$('#reTitle').textContent=r.name||'Receta';
+  const R=S.r[curR.id],r=curRec,c=calc(r,R),isSubrecipe=isSubrecipeRecipe(R,r);$('#reTitle').textContent=r.name||'Receta';
   $('#reBody').innerHTML=`<div class="stack">
    ${r.example?'<span class="ex">Receta de ejemplo: cámbiala o elimínala</span>':''}
    <div class="grid3"><div class="field span2"><label for="fName">Nombre</label><input class="in" id="fName" value="${esc(r.name)}"></div><div class="field"><label for="fCat">Categoría</label><select class="in" id="fCat"><option value="">Sin categoría</option>${R.categories.map(k=>`<option value="${k.id}" ${k.id===r.cat?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>
@@ -739,7 +742,7 @@ function renderRecipe(){
     <div class="kpi"><small>Aporte a gastos operativos (<span data-o="opex">${pct(c.opex)}</span>) / porción</small><b class="num" data-o="contrib">${money(c.opexAmt)}</b></div>
     <div class="kpi"><small>Ganancia / porción</small><b class="num" data-o="net">${money(c.net)}</b></div><div class="kpi hl"><small>Margen de ganancia</small><b class="num" data-o="margin">${pct(c.margin)}</b></div>
     <div class="kpi"><small>Ganancia por tanda (<span data-o="portions">${c.portions}</span>)</small><b class="num" data-o="netTotal">${money(c.netTotal)}</b></div><div class="kpi"><small>Precio sugerido (ganancia <span data-o="target">${pct(c.target)}</span> + gastos <span data-o="opex">${pct(c.opex)}</span>)</small><b class="num" data-o="suggested">${money(c.suggested)}</b> <button class="btn sm ghost" id="useSug" style="margin-top:6px">Usar</button></div>`}</div>
-   <div class="rowx"><h2 class="sec">Ingredientes y subrecetas</h2><span class="sp"></span><div class="add-picker"><input class="in" id="addSearch" type="search" placeholder="🔍 Buscar materia prima o subreceta…" autocomplete="off"><div class="add-results" id="addResults" hidden></div></div></div>
+   <div class="stack" style="gap:7px"><h2 class="sec">Ingredientes y subrecetas</h2><div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" id="addSearch" type="search" placeholder="Buscar y tocar para añadir materia prima o subreceta…" autocomplete="off" style="padding-left:42px"><div class="add-results" id="addResults" hidden></div></div></div>
    <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo/unidad</th><th>Costo en receta</th><th>% participación</th><th></th></tr></thead><tbody>
    ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}${l.subrecipe?' · Subreceta':''}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${qShow(l.ing,l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(uShow(l.ing))}</td><td class="num">${money(ucShow(l.ing,l.uc))}${!l.subrecipe&&(!l.ing||nd(l.ing.price)<=0)?' <span class="miss-dot" title="Sin precio">⚠</span>':''}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
    <tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num"><b data-o="base">${money(c.base)}</b></td><td class="num">100%</td><td></td></tr></tbody></table></div>
@@ -752,7 +755,7 @@ function renderRecipe(){
   bind('#fName','name');bind('#fCat','cat');bind('#fPor','portions','n');bind('#fErr','error','n',true);if(!isSubrecipe){bind('#fPrice','price','money');bind('#fTar','target','n',true);bind('#fOpx','opex','n',true);$('#useSug').onclick=()=>{r.price=Math.ceil(c.suggested/100)*100;sv();renderRecipe()}}
   const addResults=$('#addResults'),addSearch=$('#addSearch');
   const paintsAddResults=()=>{const q=norm(addSearch.value),mp=R.ingredients.filter(i=>!q||norm(i.name).includes(q)).slice(0,80),subs=R.recipes.filter(x=>norm(catName(R,x.cat))==='subrecetas'&&x.id!==r.id&&!recipeDependsOn(x.id,r.id,R)&&(!q||norm(x.name).includes(q))).slice(0,80);
-    addResults.innerHTML=[...mp.map(i=>`<button type="button" data-add-type="ingredient" data-add-id="${i.id}"><span>${esc(i.name||'(sin nombre)')}<small>Materia prima · ${esc(uShow(i))}${nd(i.price)>0?` · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}`:' · sin precio'}</small></span></button>`),...subs.map(x=>`<button type="button" data-add-type="recipe" data-add-id="${x.id}"><span>${esc(x.name)}<small>Subreceta · ${money(recipeCostPerPortion(x,R))}/porción</small></span></button>`)].join('')||'<div class="muted small" style="padding:10px">No hay coincidencias.</div>';addResults.hidden=false;
+    addResults.innerHTML=[...mp.map(i=>`<button type="button" data-add-type="ingredient" data-add-id="${i.id}"><span>${esc(i.name||'(sin nombre)')}<small>Materia prima · ${esc(uShow(i))}${nd(i.price)>0?` · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}`:' · sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`),...subs.map(x=>`<button type="button" data-add-type="recipe" data-add-id="${x.id}"><span>${esc(x.name)}<small>Subreceta · ${money(recipeCostPerPortion(x,R))}/porción</small></span><b class="add-action">+ Añadir</b></button>`)].join('')||'<div class="muted small" style="padding:10px">No hay coincidencias.</div>';addResults.hidden=false;
     addResults.querySelectorAll('[data-add-id]').forEach(b=>b.onclick=()=>{const type=b.dataset.addType,id=b.dataset.addId;if(type==='recipe'&&recipeDependsOn(id,r.id,R))return toast('Esa subreceta depende de esta receta y crearía un ciclo');r.items.push({ing:id,qty:0,type});sv();addSearch.value='';addResults.hidden=true;renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},30)});
   };
   addSearch.onfocus=paintsAddResults;addSearch.oninput=paintsAddResults;addSearch.onkeydown=e=>{if(e.key==='Escape')addResults.hidden=true};addSearch.onblur=()=>setTimeout(()=>{if(!addResults.contains(document.activeElement))addResults.hidden=true},120);
@@ -773,11 +776,11 @@ const sheetName=(wb,s)=>{let nm=(s||'Hoja').replace(/[\\\/\?\*\[\]:]/g,'').slice
 function exportRecipes(R,ids){
   if(!window.XLSX)return toast('No cargó el generador de Excel');const wb=XLSX.utils.book_new();const recs=R.recipes.filter(r=>ids.includes(r.id));
   const sum=[['Receta','Categoría','Porciones','Costo ingredientes','Margen de error %','Costo total','Costo por porción','Precio de venta','Food cost %','Aporte gastos operativos %','Aporte gastos operativos $','Ganancia por porción','Margen de ganancia %','Precio sugerido','Precios faltantes']];
-  recs.forEach(r=>{const c=calc(r,R);sum.push([r.name,catName(R,r.cat),c.portions,Math.round(c.base),c.err*100,Math.round(c.total),Math.round(c.perPortion),c.price,+(c.foodCost*100).toFixed(1),+(c.opex*100).toFixed(1),Math.round(c.opexAmt),Math.round(c.net),+(c.margin*100).toFixed(1),Math.round(c.suggested),[...new Set(c.missing)].join(', ')])});
+  recs.forEach(r=>{const c=calc(r,R),sub=isSubrecipeRecipe(R,r);sum.push([r.name,catName(R,r.cat),c.portions,Math.round(c.base),c.err*100,Math.round(c.total),Math.round(c.perPortion),sub?'':c.price,sub?'':+(c.foodCost*100).toFixed(1),sub?'':+(c.opex*100).toFixed(1),sub?'':Math.round(c.opexAmt),sub?'':Math.round(c.net),sub?'':+(c.margin*100).toFixed(1),sub?'':Math.round(c.suggested),[...new Set(c.missing)].join(', ')])});
   const ws0=XLSX.utils.aoa_to_sheet(sum);ws0['!cols']=sum[0].map((h,i)=>({wch:i?16:28}));XLSX.utils.book_append_sheet(wb,ws0,'Resumen');const used=new Set();
   recs.forEach(r=>{const c=calc(r,R);const rows=[[r.name],['Categoría',catName(R,r.cat)],['Porciones',c.portions],[],['Ingrediente','Cantidad','Unidad','Costo por unidad','Costo en receta','% participación']];
     c.lines.forEach(l=>{used.add(l.it.ing);rows.push([l.ing?.name||'',nd(l.it.qty),l.ing?.unit||'',+l.uc.toFixed(2),Math.round(l.cost),+(l.share*100).toFixed(1)])});
-    rows.push([],['Costo ingredientes','','','',Math.round(c.base)],['Margen de error %','','','',c.err*100],['Costo total','','','',Math.round(c.total)],['Costo por porción','','','',Math.round(c.perPortion)],['Precio de venta','','','',c.price],['Food cost %','','','',+(c.foodCost*100).toFixed(1)],['Aporte a gastos operativos %','','','',+(c.opex*100).toFixed(1)],['Aporte a gastos operativos por porción','','','',Math.round(c.opexAmt)],['Ganancia por porción','','','',Math.round(c.net)],['Margen de ganancia %','','','',+(c.margin*100).toFixed(1)],['Precio sugerido','','','',Math.round(c.suggested)]);
+    const sub=isSubrecipeRecipe(R,r);rows.push([],['Costo ingredientes','','','',Math.round(c.base)],['Margen de error %','','','',c.err*100],['Costo total','','','',Math.round(c.total)],['Costo por porción','','','',Math.round(c.perPortion)]);if(!sub)rows.push(['Precio de venta','','','',c.price],['Food cost %','','','',+(c.foodCost*100).toFixed(1)],['Aporte a gastos operativos %','','','',+(c.opex*100).toFixed(1)],['Aporte a gastos operativos por porción','','','',Math.round(c.opexAmt)],['Ganancia por porción','','','',Math.round(c.net)],['Margen de ganancia %','','','',+(c.margin*100).toFixed(1)],['Precio sugerido','','','',Math.round(c.suggested)]);
     const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:34},{wch:10},{wch:8},{wch:16},{wch:16},{wch:15}];XLSX.utils.book_append_sheet(wb,ws,sheetName(wb,r.name))});
   const mp=[['Ingrediente','Unidad','Presentación','Precio compra','Rendimiento %','Costo por unidad']];R.ingredients.filter(i=>used.has(i.id)).forEach(i=>mp.push([i.name,i.unit,nd(i.pack),nd(i.price),nd(i.yield??100),+unitCost(i).toFixed(2)]));
   const ws2=XLSX.utils.aoa_to_sheet(mp);ws2['!cols']=[{wch:28},{wch:8},{wch:13},{wch:14},{wch:13},{wch:15}];XLSX.utils.book_append_sheet(wb,ws2,'Materia prima');
@@ -786,10 +789,18 @@ function exportRecipes(R,ids){
 async function exportRecipePng(R,r){
   if(document.fonts?.ready)await document.fonts.ready;
   const lines=(r.items||[]).map(it=>{const ing=R.ingredients.find(x=>x.id===it.ing),sub=!ing&&it.type==='recipe'?recipeById(R,it.ing):null;let qty=nd(it.qty),unit=ing?.unit|| (sub?'porción':'');if(unit.toLowerCase()==='ml'){qty=qty/30;unit='oz'}return{name:ing?.name||sub?.name||'Ingrediente eliminado',amount:`${Number(qty.toFixed(2))} ${unit}`.trim()}});
-  const w=1080,pad=80,rowH=92,headH=210,foot=80,h=headH+lines.length*rowH+foot,canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const c=canvas.getContext('2d');
-  c.fillStyle='#F3EBDD';c.fillRect(0,0,w,h);c.fillStyle='#173C32';c.fillRect(0,0,w,18);c.fillStyle='#0E0E0C';c.font='700 52px "M PLUS Rounded 1c",sans-serif';c.fillText(r.name||'Receta',pad,105,w-pad*2);c.fillStyle='#B8913A';c.fillRect(pad,145,w-pad*2,4);
-  c.font='700 25px "M PLUS Rounded 1c",sans-serif';c.fillStyle='#173C32';c.fillText('INGREDIENTE',pad,194);c.textAlign='right';c.fillText('CANTIDAD',w-pad,194);c.textAlign='left';
-  c.font='500 30px "M PLUS Rounded 1c",sans-serif';c.fillStyle='#0E0E0C';lines.forEach((line,i)=>{const y=headH+i*rowH+48;c.fillText(line.name,pad,y,w-pad*2-220);c.textAlign='right';c.fillText(line.amount,w-pad,y);c.textAlign='left';c.strokeStyle='rgba(23,60,50,.18)';c.lineWidth=2;c.beginPath();c.moveTo(pad,y+25);c.lineTo(w-pad,y+25);c.stroke()});
+  const w=1200,pad=78,rowH=88,headH=270,foot=64,h=headH+lines.length*rowH+foot,canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const c=canvas.getContext('2d');
+  const accent=tone(curR)||'#173C32',rgb=accent.match(/[\da-f]{2}/gi)?.map(v=>parseInt(v,16))||[23,60,50],lum=(.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2])/255,ink=lum>.58?'#0E0E0C':'#F3EBDD';
+  const logo=curR?.logo?await new Promise(resolve=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>resolve(im);im.onerror=()=>resolve(null);im.src=curR.logo}):null;
+  const contain=(im,x,y,mw,mh)=>{if(!im)return;const iw=im.naturalWidth||im.width,ih=im.naturalHeight||im.height,s=Math.min(mw/iw,mh/ih),dw=iw*s,dh=ih*s;c.drawImage(im,x+(mw-dw)/2,y+(mh-dh)/2,dw,dh)};
+  c.fillStyle='#FBF8F2';c.fillRect(0,0,w,h);c.fillStyle=accent;c.fillRect(0,0,w,238);c.fillRect(0,0,22,h);
+  if(logo){c.fillStyle='rgba(255,255,255,.94)';c.beginPath();c.roundRect(pad,42,150,150,24);c.fill();contain(logo,pad+12,54,126,126)}
+  const titleX=logo?pad+188:pad;c.fillStyle=ink;c.font='700 50px "M PLUS Rounded 1c",sans-serif';c.fillText(r.name||'Receta',titleX,103,w-titleX-pad);c.font='700 23px "M PLUS Rounded 1c",sans-serif';c.fillText(curR?.name||'',titleX,151,w-titleX-pad);
+  c.fillStyle=accent;c.fillRect(pad,238,w-pad*2,8);
+  c.save();c.globalAlpha=.055;if(logo)contain(logo,w/2-190,headH+(lines.length*rowH)/2-190,380,380);c.restore();
+  const startY=headH+20;c.font='800 22px "M PLUS Rounded 1c",sans-serif';c.fillStyle=accent;c.fillText('INGREDIENTE',pad,startY);c.textAlign='right';c.fillText('CANTIDAD',w-pad,startY);c.textAlign='left';
+  c.font='500 29px "M PLUS Rounded 1c",sans-serif';c.fillStyle='#0E0E0C';lines.forEach((line,i)=>{const y=startY+54+i*rowH;c.fillText(line.name,pad,y,w-pad*2-220);c.textAlign='right';c.fillText(line.amount,w-pad,y);c.textAlign='left';c.strokeStyle='rgba(23,60,50,.18)';c.lineWidth=2;c.beginPath();c.moveTo(pad,y+24);c.lineTo(w-pad,y+24);c.stroke()});
+  c.fillStyle=accent;c.fillRect(22,h-foot,w-22,foot);if(logo){c.save();c.globalAlpha=.92;contain(logo,pad,h-foot+7,50,50);c.restore()}
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)return toast('No se pudo crear la imagen');const dl=await getDL();if(!dl)return toast('Las descargas no están disponibles aquí');try{const safe=(r.name||'receta').replace(/[\\/:*?"<>|]/g,'');await dl.save({filename:`${safe}.png`,data:blob});toast('Imagen lista')}catch(e){toast(e.code==='declined'?'Descarga cancelada':'No se pudo descargar la imagen')}
 }
 
@@ -1054,7 +1065,7 @@ function pickSheet(title,opts,cur,cb){const P=$('#genPane');P.innerHTML=`<h2>${e
 let saR=null,saPer=null,saCat='all';
 const CLS={pole:['Pole','Alta venta + alta rentabilidad','Mantenlo como está: visible en la carta y con la calidad de siempre.'],podio:['Podio','Alta venta + baja rentabilidad','Se vende mucho pero deja poco: revisa porción, costo o súbele un poco el precio.'],rookie:['Rookie','Baja venta + alta rentabilidad','Deja buen margen pero pocos lo piden: promuévelo, ubícalo mejor en la carta o que el equipo lo recomiende.'],box:['Box','Baja venta + baja rentabilidad','Reformúlalo o piensa en sacarlo de la carta.']};
 function analyze(R,per,cat){
-  const rows=R.recipes.filter(r=>cat==='all'||r.cat===cat).map(r=>{const u=nd(per.units?.[r.id]);const c=calc(r,R);return{r,u,cm:c.contrib,price:c.price}}).filter(x=>x.u>0);
+  const rows=R.recipes.filter(r=>!isSubrecipeRecipe(R,r)&&(cat==='all'||r.cat===cat)).map(r=>{const u=nd(per.units?.[r.id]);const c=calc(r,R);return{r,u,cm:c.contrib,price:c.price}}).filter(x=>x.u>0);
   const N=rows.length,tu=rows.reduce((a,x)=>a+x.u,0);if(!N||!tu)return{rows:[],N:0};
   const avgCM=rows.reduce((a,x)=>a+x.cm*x.u,0)/tu;const popT=(1/N)*0.7;
   rows.forEach(x=>{x.mix=x.u/tu;x.hiPop=x.mix>=popT;x.hiCM=x.cm>=avgCM;x.cls=x.hiPop&&x.hiCM?'pole':x.hiPop?'podio':x.hiCM?'rookie':'box';x.totCM=x.cm*x.u});
@@ -1078,7 +1089,7 @@ function renderSales(){
     B.innerHTML=`<div class="stack wrapmax"><span class="muted">JBShare: mete cuántas unidades vendió cada producto en un periodo. Con los costos de las recetas, la app te dice cuáles son Pole, Podio, Rookie y Box.</span><div class="rrows">${S.meta.restaurants.map(r=>{const n=(S.r[r.id]?.sales||[]).length;return `<button class="rrow" data-sr="${r.id}"><span class="lg" style="background:${tone(r)}">${rFace(r)}</span><span class="nm">${esc(r.name)}</span><span class="st"><small>Periodos</small><span class="pill ${n?'ok':'fav'} num">${n}</span></span></button>`}).join('')||'<div class="empty">Crea un restaurante primero.</div>'}</div></div>`;
     B.querySelectorAll('[data-sr]').forEach(b=>b.onclick=()=>{saR=b.dataset.sr;saPer=null;saCat='all';blip(800,.03);renderSales()});return}
   const R=S.r[saR],r=restById(saR);$('#saTitle').textContent='JBShare · '+r.name;const sv=()=>saveR(saR);
-  const noRec=!R.recipes.length,noPrice=R.recipes.filter(x=>!nd(x.price)||!x.items.length).length;
+  const salesRecipes=R.recipes.filter(x=>!isSubrecipeRecipe(R,x));const noRec=!salesRecipes.length,noPrice=salesRecipes.filter(x=>!nd(x.price)||!x.items.length).length;
   const warn=noRec?`<div class="card stack" style="border:2px solid var(--warn)"><b>${esc(r.name)} todavía no tiene recetas</b><span class="small muted">JBShare cruza las unidades vendidas con el costo y el precio de cada receta. Carga primero las recetas y luego vuelve aquí.</span><div class="rowx"><button class="btn sm" id="saGoRec">Ir a las recetas</button></div></div>`:noPrice?`<div class="card small" style="border:2px solid var(--warn)">${noPrice} receta(s) sin precio o sin ingredientes: su clasificación saldrá mal hasta completarlas.</div>`:'';
   if(!saPer){B.innerHTML=`<div class="stack wrapmax"><div class="rowx"><button class="btn sm ghost" id="saBack">← Restaurantes</button></div>${warn}
      <form class="card stack" id="perForm"><b>Nuevo periodo de ventas</b><div class="grid3"><div class="field"><label for="pName">Nombre</label><input class="in" id="pName" placeholder="Ej: Octubre 2026"></div><div class="field"><label for="pFrom">Desde</label><input class="in" type="date" id="pFrom"></div><div class="field"><label for="pTo">Hasta</label><input class="in" type="date" id="pTo"></div></div><div class="rowx"><span class="sp"></span><button class="btn" style="background:var(--share);color:#fff">Crear periodo</button></div></form>
@@ -1089,11 +1100,11 @@ function renderSales(){
   const per=R.sales.find(p=>p.id===saPer);per.units=per.units||{};const a=analyze(R,per,saCat);
   B.innerHTML=`<div class="stack wrapmax"><div class="rowx"><button class="btn sm ghost" id="perBack">← Periodos</button><span class="sp"></span><label class="btn sm ghost">Importar Excel o CSV<input type="file" id="perFile" accept=".xlsx,.xls,.csv" hidden></label></div>
    <div class="rowx"><h2 class="sec">${esc(per.name)}</h2><span class="muted small">${fdate(per.from)} – ${fdate(per.to)}</span></div>
-   <div class="tabs" style="padding-top:0"><button class="tab" data-sc="all" aria-selected="${saCat==='all'}">Toda la carta</button>${R.categories.map(c=>`<button class="tab" data-sc="${c.id}" aria-selected="${saCat===c.id}">${esc(c.name)}</button>`).join('')}</div>
+   <div class="tabs" style="padding-top:0"><button class="tab" data-sc="all" aria-selected="${saCat==='all'}">Toda la carta</button>${R.categories.filter(c=>norm(c.name)!=='subrecetas').map(c=>`<button class="tab" data-sc="${c.id}" aria-selected="${saCat===c.id}">${esc(c.name)}</button>`).join('')}</div>
    ${a.N?`<div class="quad">${quadSVG(a)}</div>
    <div class="rlist">${Object.entries(CLS).map(([k,v])=>{const it=a.rows.filter(x=>x.cls===k);return `<div class="card stack" style="gap:6px"><span class="rowx"><span class="chip ${k}">${v[0]}</span><span class="muted small">${v[1]}</span></span>${it.length?it.map(x=>`<b>${esc(x.r.name)}</b>`).join(''):'<span class="muted small">Ninguno</span>'}<span class="small muted">${v[2]}</span></div>`}).join('')}</div>`:'<div class="empty card">Escribe las unidades vendidas abajo (o importa el archivo) para ver la matriz.</div>'}
    <div class="tbl-wrap"><table><thead><tr><th>Producto</th><th>Unidades vendidas</th><th>% de ventas</th><th>Aporte/unidad</th><th>Aporte total</th><th>Clase</th></tr></thead><tbody>
-   ${R.recipes.filter(x=>saCat==='all'||x.cat===saCat).map(rc=>{const x=a.rows.find(y=>y.r.id===rc.id);const c=calc(rc,R);return `<tr><td class="w-name">${esc(rc.name)}</td><td><input class="in num" data-u="${rc.id}" inputmode="numeric" value="${per.units[rc.id]||''}" style="width:90px"></td><td class="num">${x?pct(x.mix):'–'}</td><td class="num">${money(c.contrib)}</td><td class="num">${x?money(x.totCM):'–'}</td><td>${x?`<span class="chip ${x.cls}">${CLS[x.cls][0]}</span>`:''}</td></tr>`}).join('')}
+   ${R.recipes.filter(x=>!isSubrecipeRecipe(R,x)&&(saCat==='all'||x.cat===saCat)).map(rc=>{const x=a.rows.find(y=>y.r.id===rc.id);const c=calc(rc,R);return `<tr><td class="w-name">${esc(rc.name)}</td><td><input class="in num" data-u="${rc.id}" inputmode="numeric" value="${per.units[rc.id]||''}" style="width:90px"></td><td class="num">${x?pct(x.mix):'–'}</td><td class="num">${money(c.contrib)}</td><td class="num">${x?money(x.totCM):'–'}</td><td>${x?`<span class="chip ${x.cls}">${CLS[x.cls][0]}</span>`:''}</td></tr>`}).join('')}
    </tbody></table></div>
    ${a.N?`<span class="muted small">Alta venta = vende al menos el 70% de lo que le tocaría si todos vendieran igual (${pct(a.popT)}). Alta rentabilidad = deja más que el aporte promedio ponderado (${money(a.avgCM)}).</span>`:''}
    <div class="rowx"><span class="sp"></span><button class="btn danger sm" id="perDel">Eliminar periodo</button></div></div>`;
