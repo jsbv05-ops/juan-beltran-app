@@ -262,6 +262,9 @@ td .in{padding:6px 8px;border-radius:8px}
 .syncdot{width:14px;height:14px;border-radius:50%;background:#2ecc71;flex:none;box-shadow:0 0 0 4px color-mix(in srgb,#2ecc71 25%,transparent)}.syncdot[data-st="pend"]{background:#E2B53E}.syncdot[data-st="err"],.syncdot[data-st="off"]{background:#c0392b}
 .afx{position:relative;display:inline-flex;align-items:center;max-width:100%}.field>.afx,.grid2 .afx,.egrid .afx{display:flex;width:100%}.afx>input{width:100%;min-width:0}
 .afx>i{position:absolute;font-style:normal;font-weight:800;color:#B8913A;pointer-events:none;font-size:.95em}.afx-l>i{left:12px}.afx-l>input{padding-left:26px!important}.afx-r>i{right:12px}.afx-r>input{padding-right:30px!important}
+.tile,[data-ci],[data-ri]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.dragging{position:relative;z-index:5;box-shadow:0 14px 34px #0007!important;opacity:.95;transition:none!important}.sorting>*:not(.dragging){transition:transform .18s ease}
+.sorting{user-select:none;-webkit-user-select:none}.grip{cursor:grab;opacity:.55;font-size:18px;padding:0 6px;user-select:none}
 .ubtn{min-width:56px;padding:8px 12px;border-radius:999px;border:0;background:#173C32;color:#F3EBDD;font:inherit;font-weight:800;font-size:14px;cursor:pointer}
 .ubtn::after{content:" ▾";opacity:.7;font-size:11px}
 .packw{display:inline-flex;align-items:center;gap:6px}.usfx{font-weight:800;font-size:13px;color:#B8913A;min-width:22px}
@@ -364,7 +367,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.7.7</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.7.8</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -563,6 +566,7 @@ function renderHome(){
   const sh=$('#shelf');
   sh.innerHTML=R.length?R.map((r,i)=>`<button class="tile ${i===selIdx?'sel':''}" data-i="${i}" aria-label="${esc(r.name)}"><span class="art" style="background:${tone(r)}">${r.logo?`<img src="${r.logo}" alt="">`:`<span class="mono" style="font-size:${r.name.length>14?28:r.name.length>8?38:54}px">${esc(r.name)}</span>`}</span></button>`).join(''):`<div class="emptyhome">Toca “Tarjeta nueva” abajo para agregar tu primer restaurante</div>`;
   sh.querySelectorAll('.tile').forEach(t=>t.onclick=()=>{const i=+t.dataset.i;if(i===selIdx){blip(990);openRest(R[i].id)}else{select(i,true)}});
+  if(!sh._sortable){sh._sortable=1;dragSort(sh,'.tile','x',(i,t)=>{const L=S.meta.restaurants;moveIdx(L,i,t);selIdx=t;saveMeta();renderHome();toast('Tarjetas reordenadas')})}
   paintTitle();renderDock();
   requestAnimationFrame(()=>{const t=sh.querySelector(`[data-i="${selIdx}"]`);if(t)sh.scrollTo({left:t.offsetLeft-sh.offsetLeft-parseFloat(getComputedStyle(sh).paddingLeft),behavior:'instant'})});
 }
@@ -654,6 +658,30 @@ function recipesView(R){
   ${list.length?groups.map(g=>`${g.c?`<h2 class="sec" style="margin-top:6px">${esc(g.c.name)} <span class="muted small">${g.items.length}</span></h2>`:''}<div class="rlist">${g.items.map(card).join('')}</div>`).join(''):`<div class="empty card">No hay recetas aquí todavía. Carga la materia prima y crea la primera con “Nueva receta”.</div>`}
   </div>`;
 }
+/* ---------- mantener presionado y arrastrar para ordenar ---------- */
+function scrollParent(el,axis){for(let e=el.parentElement;e;e=e.parentElement){const cs=getComputedStyle(e);const o=axis==='x'?cs.overflowX:cs.overflowY;if(/(auto|scroll)/.test(o)&&(axis==='x'?e.scrollWidth>e.clientWidth:e.scrollHeight>e.clientHeight))return e}return document.scrollingElement}
+function dragSort(box,sel,axis,onEnd){if(!box)return;let st=null,timer=null;
+  const pt=e=>{const t=e.touches?e.touches[0]||e.changedTouches[0]:e;return{x:t.clientX,y:t.clientY}};
+  const start=e=>{const it=e.target.closest(sel);if(!it||!box.contains(it)||e.target.closest('input,textarea,select,[data-nodrag]'))return;const p0=pt(e);
+    clearTimeout(timer);timer=setTimeout(()=>{const items=[...box.querySelectorAll(sel)];const i=items.indexOf(it);if(i<0)return;const sp=scrollParent(box,axis);
+      st={it,items,i,t:i,p0,sp,s0:axis==='x'?sp.scrollLeft:sp.scrollTop,rects:items.map(x=>x.getBoundingClientRect()),cur:p0};
+      const r=st.rects;st.size=(r.length>1?Math.abs((axis==='x'?r[1].left-r[0].left:r[1].top-r[0].top)):(axis==='x'?r[0].width:r[0].height));
+      it.classList.add('dragging');box.classList.add('sorting');if(box.id==='shelf')box.style.scrollSnapType='none';try{navigator.vibrate?.(12)}catch(x){}blip(700,.03);loop()},320);
+    st=null;box._p0=p0};
+  const move=e=>{const p=pt(e);if(!st){if(timer&&box._p0&&Math.hypot(p.x-box._p0.x,p.y-box._p0.y)>8){clearTimeout(timer);timer=null}return}e.preventDefault();st.cur=p;layout()};
+  const layout=()=>{const k=axis==='x'?'x':'y';const ds=(axis==='x'?st.sp.scrollLeft:st.sp.scrollTop)-st.s0;const d=st.cur[k]-st.p0[k]+ds;
+    st.it.style.transform=axis==='x'?`translateX(${d}px) scale(1.04)`:`translateY(${d}px) scale(1.02)`;
+    const r=st.rects[st.i];const c=(axis==='x'?r.left+r.width/2:r.top+r.height/2)+d;let t=0;st.rects.forEach((q,j)=>{if(j===st.i)return;const m=axis==='x'?q.left+q.width/2:q.top+q.height/2;if(m<c)t++});st.t=t;
+    st.items.forEach((x,j)=>{if(j===st.i)return;let off=0;if(st.i<t&&j>st.i&&j<=t)off=-st.size;if(t<st.i&&j>=t&&j<st.i)off=st.size;x.style.transform=off?(axis==='x'?`translateX(${off}px)`:`translateY(${off}px)`):''})};
+  const loop=()=>{if(!st)return;const sp=st.sp,R=sp===document.scrollingElement?{top:0,left:0,bottom:innerHeight,right:innerWidth}:sp.getBoundingClientRect();const v=axis==='x'?st.cur.x:st.cur.y,a=axis==='x'?R.left:R.top,b=axis==='x'?R.right:R.bottom;
+    const sp2=v<a+60?-(a+60-v)/4:v>b-60?(v-(b-60))/4:0;if(sp2){axis==='x'?sp.scrollLeft+=sp2:sp.scrollTop+=sp2;layout()}requestAnimationFrame(loop)};
+  const end=()=>{clearTimeout(timer);timer=null;if(!st)return;const {i,t,items,it}=st;st=null;items.forEach(x=>x.style.transform='');it.classList.remove('dragging');box.classList.remove('sorting');if(box.id==='shelf')box.style.scrollSnapType='';
+    box._noclick=Date.now();if(t!==i){blip(1000,.04);onEnd(i,t)}};
+  box.addEventListener('touchstart',start,{passive:true});box.addEventListener('touchmove',move,{passive:false});box.addEventListener('touchend',end);box.addEventListener('touchcancel',end);
+  box.addEventListener('mousedown',start);addEventListener('mousemove',e=>{if(st||timer)move(e)});addEventListener('mouseup',end);
+  box.addEventListener('click',e=>{if(box._noclick&&Date.now()-box._noclick<400){e.stopPropagation();e.preventDefault()}},true);
+  box.addEventListener('contextmenu',e=>{if(e.target.closest(sel))e.preventDefault()})}
+const moveIdx=(arr,i,t)=>{const [x]=arr.splice(i,1);arr.splice(t,0,x);return arr};
 /* ---------- $ y % dentro de los campos ---------- */
 function affixLabel(i){const f=i.closest('.field');if(f){const l=f.querySelector('label,.lab');if(l)return l.textContent}const td=i.closest('td');if(td){const idx=[...td.parentElement.children].indexOf(td);const th=td.closest('table')?.querySelector('thead tr')?.children[idx];if(th)return th.textContent}return ''}
 function affix(i){if(i.dataset.afx||!i.matches('input.in'))return;i.dataset.afx='1';if(/date|search|file|checkbox|email|password|url/.test(i.type))return;const im=i.getAttribute('inputmode');if(!i.classList.contains('num')&&!/numeric|decimal/.test(im||''))return;
@@ -665,32 +693,47 @@ new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes){if(n.no
 /* ---------- copiar entre tarjetas ---------- */
 function copyIng(src,dst,i,upd){const ex=dst.ingredients.find(x=>norm(x.name)===norm(i.name));if(ex){if(upd)Object.assign(ex,{unit:i.unit,pack:i.pack,price:i.price,yield:i.yield??100});return{ing:ex,isNew:false}}
   const n={id:uid(),name:i.name,unit:i.unit,pack:i.pack,price:i.price,yield:i.yield??100};dst.ingredients.push(n);return{ing:n,isNew:true}}
-function copyRec(src,dst,rec,stats,seen=new Map()){if(seen.has(rec.id))return seen.get(rec.id);
+function copyRec(src,dst,rec,stats,seen=new Map()){if(seen.has(rec.id)&&!seen.get(rec.id).asIng)return seen.get(rec.id);
   const cn=catName(src,rec.cat);let cat=null;if(cn){cat=dst.categories.find(c=>norm(c.name)===norm(cn));if(!cat){cat={id:uid(),name:cn};dst.categories.push(cat)}}
   let name=rec.name;if(dst.recipes.some(x=>norm(x.name)===norm(name)))name+=' (copia)';
   const n={...JSON.parse(JSON.stringify(rec)),id:uid(),name,cat:cat?.id||null,items:[]};delete n.example;seen.set(rec.id,n);
   for(const it of rec.items||[]){const ing=src.ingredients.find(x=>x.id===it.ing);if(ing){const r2=copyIng(src,dst,ing,false);if(r2.isNew)stats.ing++;n.items.push({...it,ing:r2.ing.id});continue}
-    const sub=recipeById(src,it.ing);if(sub){const same=dst.recipes.find(x=>norm(x.name)===norm(sub.name));const d=same||copyRec(src,dst,sub,stats,seen);n.items.push({...it,ing:d.id,type:'recipe'})}}
+    const sub=recipeById(src,it.ing);if(sub){const pre=seen.get(sub.id);if(pre&&pre.asIng){n.items.push({ing:pre.id,qty:it.qty});continue}const same=dst.recipes.find(x=>norm(x.name)===norm(sub.name));const d=same||copyRec(src,dst,sub,stats,seen);n.items.push({...it,ing:d.id,type:'recipe'})}}
   dst.recipes.push(n);stats.rec++;return n}
+function subsOf(R,rec,seen=new Set()){const out=[];for(const it of rec.items||[]){if(R.ingredients.some(x=>x.id===it.ing))continue;const sub=recipeById(R,it.ing);if(sub&&!seen.has(sub.id)){seen.add(sub.id);out.push(sub,...subsOf(R,sub,seen))}}return out}
 async function copySheet(R,kind,preIds){const others=S.meta.restaurants.filter(r=>r.id!==curR.id);if(!others.length)return toast('No hay otra tarjeta');
-  let dest=null,sel=new Set(preIds||[]),q='',upd=false;const P=$('#genPane');const items=kind==='mp'?[...R.ingredients].sort((a,b)=>(a.name||'').localeCompare(b.name||'','es')):[...R.recipes];
-  const draw=()=>{const L=items.filter(x=>!q||norm(x.name).includes(norm(q)));P.innerHTML=`<h2>Copiar ${kind==='mp'?'materia prima':'recetas'}</h2>
-    <div class="field"><span class="lab">¿A qué tarjeta?</span><div class="rowx" style="gap:6px">${others.map(r=>`<button type="button" class="tab" data-dst="${r.id}" aria-selected="${dest===r.id}" style="${dest===r.id?`background:${tone(r)};color:#fff`:''}">${esc(r.name)}</button>`).join('')}</div></div>
-    ${preIds?'':`<input class="in" id="cpQ" type="search" placeholder="🔍 Buscar…" value="${esc(q)}"><div class="rowx" style="gap:6px"><button class="btn sm ghost" id="cpAll">Seleccionar todo</button><button class="btn sm ghost" id="cpNone">Quitar</button><span class="sp"></span><small class="muted">${sel.size} seleccionado(s)</small></div>
-    <div class="paylist" style="max-height:42vh">${L.map(x=>`<button type="button" class="payit" data-cp="${x.id}" aria-pressed="${sel.has(x.id)}"><span class="ck"></span><span class="pn">${esc(x.name||'(sin nombre)')}<small>${kind==='mp'?`${esc(x.unit||'')} · ${nd(x.price)>0?money(x.price):'sin precio'}`:`${(x.items||[]).length} ingredientes`}</small></span></button>`).join('')}</div>`}
-    ${kind==='mp'?`<label class="rowx small" style="gap:8px"><input type="checkbox" id="cpUpd" ${upd?'checked':''}> Si ya existe en la otra tarjeta, actualizar su precio con el de aquí</label>`:'<span class="muted small">Se copian también los ingredientes y subrecetas que la receta necesite y no estén en la otra tarjeta.</span>'}
-    <button class="btn" id="cpGo" style="background:#173C32;color:#F3EBDD" ${dest&&sel.size?'':'disabled'}>Copiar${sel.size?` ${sel.size}`:''}</button><button class="btn ghost" id="cpX">Cancelar</button>`;
-    P.querySelectorAll('[data-dst]').forEach(b=>b.onclick=()=>{dest=b.dataset.dst;draw()});
-    P.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{const id=b.dataset.cp;sel.has(id)?sel.delete(id):sel.add(id);draw()});
-    const qi=$('#cpQ');if(qi)qi.oninput=()=>{q=qi.value;draw();setTimeout(()=>{const x=$('#cpQ');x.focus();x.setSelectionRange(x.value.length,x.value.length)},0)};
-    const al=$('#cpAll');if(al)al.onclick=()=>{L.forEach(x=>sel.add(x.id));draw()};const no=$('#cpNone');if(no)no.onclick=()=>{sel.clear();draw()};
-    const up=$('#cpUpd');if(up)up.onchange=()=>{upd=up.checked};$('#cpX').onclick=()=>$('#genSheet').hidden=true;
-    $('#cpGo').onclick=async()=>{const D=await loadR(dest);const st={ing:0,rec:0,upd:0,same:0};
-      if(kind==='mp'){for(const i of items.filter(x=>sel.has(x.id))){const r2=copyIng(R,D,i,upd);if(r2.isNew)st.ing++;else if(upd)st.upd++;else st.same++}}
-      else for(const rec of items.filter(x=>sel.has(x.id)))copyRec(R,D,rec,st);
-      saveR(dest);$('#genSheet').hidden=true;const dn=restById(dest)?.name||'';blip(1100);
-      toast(kind==='mp'?`Copiado a ${dn}: ${st.ing} nuevas${st.upd?`, ${st.upd} actualizadas`:''}${st.same?`, ${st.same} ya estaban`:''}`:`Copiado a ${dn}: ${st.rec} receta(s)${st.ing?` y ${st.ing} materia(s) prima(s)`:''}`)}};
-  draw();$('#genSheet').hidden=false}
+  let dest=null,sel=new Set(preIds||[]),q='',upd=false,withSubs=false;const P=$('#genPane');
+  const isSub=x=>norm(catName(R,x.cat))==='subrecetas';
+  const items=kind==='mp'?[...R.ingredients].sort((a,b)=>(a.name||'').localeCompare(b.name||'','es')):[...R.recipes].sort((a,b)=>isSub(a)-isSub(b));
+  const rowH=x=>`<button type="button" class="payit" data-cp="${x.id}" aria-pressed="${sel.has(x.id)}"><span class="ck"></span><span class="pn">${esc(x.name||'(sin nombre)')}<small>${kind==='mp'?`${esc(x.unit||'')} · ${nd(x.price)>0?money(x.price):'sin precio'}`:`${isSub(x)?'Subreceta':'Receta'+(catName(R,x.cat)?' · '+esc(catName(R,x.cat)):'')} · ${(x.items||[]).length} ingredientes`}</small></span></button>`;
+  const summary=()=>{if(!sel.size)return 'Toca lo que quieras copiar.';if(kind==='mp')return `Vas a copiar ${sel.size} materia(s) prima(s).`;
+    const chosen=items.filter(x=>sel.has(x.id));const subs=[...new Set(chosen.flatMap(x=>subsOf(R,x)))].filter(x=>!sel.has(x.id));
+    return `Vas a copiar solo ${sel.size} receta(s)${subs.length?(withSubs?` + ${subs.length} subreceta(s) que usan`:` · sus ${subs.length} subreceta(s) pasan como materia prima con su costo`):''}. La materia prima que falte en la otra tarjeta se crea para que el costo dé igual.`};
+  const paintList=()=>{const box=$('#cpList');if(!box)return;const L=items.filter(x=>!q||norm(x.name).includes(norm(q)));
+    box.innerHTML=kind==='rec'?[['Recetas',L.filter(x=>!isSub(x))],['Subrecetas',L.filter(isSub)]].filter(g=>g[1].length).map(([t,g])=>`<b class="small muted" style="margin:6px 2px 2px">${t}</b>${g.map(rowH).join('')}`).join(''):L.map(rowH).join('')||'<span class="muted">Nada con ese nombre.</span>';
+    box.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{const id=b.dataset.cp;sel.has(id)?sel.delete(id):sel.add(id);b.setAttribute('aria-pressed',sel.has(id));paintFoot()})};
+  const paintFoot=()=>{$('#cpSum').textContent=summary();const go=$('#cpGo');go.disabled=!(dest&&sel.size);go.textContent=dest?`Copiar a ${restById(dest)?.name||''}`:'Elige la tarjeta destino';const c=$('#cpCount');if(c)c.textContent=sel.size?`${sel.size} seleccionado(s)`:''};
+  P.innerHTML=`<h2>Copiar ${kind==='mp'?'materia prima':'recetas'}</h2>
+    <div class="field"><span class="lab">¿A qué tarjeta? (toca otra vez para quitar)</span><div class="rowx" style="gap:6px">${others.map(r=>`<button type="button" class="tab" data-dst="${r.id}">${esc(r.name)}</button>`).join('')}</div></div>
+    ${preIds?'':`<input class="in" id="cpQ" type="search" placeholder="🔍 Buscar…" autocomplete="off"><div class="rowx" style="gap:6px"><button class="btn sm ghost" id="cpNone">Quitar selección</button><span class="sp"></span><small class="muted" id="cpCount"></small></div>
+    <div class="paylist" id="cpList" style="max-height:40vh"></div>`}
+    ${kind==='mp'?`<label class="rowx small" style="gap:8px"><input type="checkbox" id="cpUpd"> Si ya existe allá, actualizar su precio con el de aquí</label>`:`<label class="rowx small" style="gap:8px"><input type="checkbox" id="cpSubs"> Copiar también las subrecetas que usen (si no, pasan como materia prima con su costo)</label>`}
+    <span class="small" id="cpSum" style="font-weight:700"></span>
+    <button class="btn" id="cpGo" style="background:#173C32;color:#F3EBDD" disabled>Elige la tarjeta destino</button><button class="btn ghost" id="cpX">Cancelar</button>`;
+  P.querySelectorAll('[data-dst]').forEach(b=>b.onclick=()=>{dest=dest===b.dataset.dst?null:b.dataset.dst;P.querySelectorAll('[data-dst]').forEach(x=>{const on=x.dataset.dst===dest;x.setAttribute('aria-selected',on);const r=restById(x.dataset.dst);x.style.background=on?tone(r):'';x.style.color=on?'#fff':''});blip(850,.03);paintFoot()});
+  const qi=$('#cpQ');if(qi)qi.oninput=()=>{q=qi.value;paintList()};
+  const no=$('#cpNone');if(no)no.onclick=()=>{sel.clear();paintList();paintFoot()};
+  const up=$('#cpUpd');if(up)up.onchange=()=>{upd=up.checked};const ws=$('#cpSubs');if(ws)ws.onchange=()=>{withSubs=ws.checked;paintFoot()};
+  $('#cpX').onclick=()=>$('#genSheet').hidden=true;
+  $('#cpGo').onclick=async()=>{if(!dest||!sel.size)return;const D=await loadR(dest);const st={ing:0,rec:0,upd:0,same:0};
+    if(kind==='mp'){for(const i of items.filter(x=>sel.has(x.id))){const r2=copyIng(R,D,i,upd);if(r2.isNew)st.ing++;else if(upd)st.upd++;else st.same++}}
+    else{const seen=new Map();const chosen=items.filter(x=>sel.has(x.id));
+      if(!withSubs)for(const x of chosen)for(const sub of subsOf(R,x)){if(sel.has(sub.id)||D.recipes.some(y=>norm(y.name)===norm(sub.name)))continue;
+        const nm=sub.name+' (subreceta)';let ing=D.ingredients.find(y=>norm(y.name)===norm(nm));const c=recipeCostPerPortion(sub,R);if(!ing){ing={id:uid(),name:nm,unit:'und',pack:1,price:Math.round(c),yield:100};D.ingredients.push(ing);st.ing++}else ing.price=Math.round(c);seen.set(sub.id,{id:ing.id,asIng:true})}
+      for(const rec of chosen)copyRec(R,D,rec,st,seen)}
+    saveR(dest);$('#genSheet').hidden=true;const dn=restById(dest)?.name||'';blip(1100);
+    toast(kind==='mp'?`Copiado a ${dn}: ${st.ing} nuevas${st.upd?`, ${st.upd} actualizadas`:''}${st.same?`, ${st.same} ya estaban`:''}`:`Copiado a ${dn}: ${st.rec} receta(s)${st.ing?` y ${st.ing} materia(s) prima(s)`:''}`)};
+  paintList();paintFoot();$('#genSheet').hidden=false}
 /* ---------- cuentas de colaboración ---------- */
 let colTab='resumen';
 function colabData(R){R.colab=R.colab||{};const C=R.colab;C.partners=C.partners||[];C.opPct=C.opPct??10;C.opTo=C.opTo||'';C.gastos=C.gastos||[];C.nomina=C.nomina||[];C.cortes=C.cortes||[];return C}
@@ -826,12 +869,11 @@ function bindRest(R){
 }
 function openCats(R){
   const P=$('#genPane');const draw=()=>{P.innerHTML=`<h2>Categorías de ${esc(curR.name)}</h2><span class="muted small">Ordénalas como van en la carta.</span>
-   <div class="stack">${R.categories.map((c,i)=>`<div class="rowx"><input class="in" data-cn="${c.id}" value="${esc(c.name)}" style="flex:1"><button class="x" data-up="${i}" aria-label="Subir" ${i===0?'disabled':''}>▲</button><button class="x" data-down="${i}" aria-label="Bajar" ${i===R.categories.length-1?'disabled':''}>▼</button><button class="x" data-dc="${c.id}" aria-label="Eliminar">✕</button></div>`).join('')||'<span class="muted">Sin categorías todavía.</span>'}</div>
+   <span class="muted small">Mantén presionada una categoría y arrástrala para cambiarla de lugar.</span><div class="stack" id="catList">${R.categories.map((c,i)=>`<div class="rowx card" data-ci="${i}" style="padding:6px 8px;flex-wrap:nowrap"><span class="grip">☰</span><input class="in" data-cn="${c.id}" value="${esc(c.name)}" style="flex:1"><button class="x" data-dc="${c.id}" aria-label="Eliminar">✕</button></div>`).join('')||'<span class="muted">Sin categorías todavía.</span>'}</div>
    <form class="rowx" id="catForm"><input class="in" id="catNew" placeholder="Nueva categoría, ej: Hamburguesas" style="flex:1"><button class="btn">Añadir</button></form>
    <div class="rowx"><span class="sp"></span><button class="btn ghost" id="catDone">Listo</button></div>`;
    P.querySelectorAll('[data-cn]').forEach(i=>i.onchange=()=>{R.categories.find(c=>c.id===i.dataset.cn).name=i.value.trim()||'Sin nombre';saveR(curR.id)});
-   P.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const i=+b.dataset.up;if(i>0){[R.categories[i-1],R.categories[i]]=[R.categories[i],R.categories[i-1]];saveR(curR.id);draw()}});
-   P.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>{const i=+b.dataset.down;if(i<R.categories.length-1){[R.categories[i+1],R.categories[i]]=[R.categories[i],R.categories[i+1]];saveR(curR.id);draw()}});
+   dragSort($('#catList'),'[data-ci]','y',(i,t)=>{moveIdx(R.categories,i,t);saveR(curR.id);draw()});
    P.querySelectorAll('[data-dc]').forEach(b=>b.onclick=()=>{R.categories=R.categories.filter(c=>c.id!==b.dataset.dc);R.recipes.forEach(r=>{if(r.cat===b.dataset.dc)r.cat=null});saveR(curR.id);draw()});
    $('#catForm').onsubmit=e=>{e.preventDefault();const v=$('#catNew').value.trim();if(!v)return;R.categories.push({id:uid(),name:v});saveR(curR.id);draw();$('#catNew').focus()};
    $('#catDone').onclick=()=>{$('#genSheet').hidden=true;renderRest()}};
@@ -840,13 +882,15 @@ function openCats(R){
 function openRecipeOrder(R){
   const P=$('#genPane');let selected=curCat==='all'?(R.categories[0]?.id||'__none__'):curCat;
   const draw=()=>{const items=R.recipes.filter(r=>selected?(selected==='__none__'?!R.categories.some(c=>c.id===r.cat):r.cat===selected):true);
-    P.innerHTML=`<h2>Ordenar recetas de ${esc(curR.name)}</h2><span class="muted small">Elige una categoría y usa las flechas para cambiar el orden. Se guarda automáticamente.</span>
-    <div class="field"><label for="orderCat">Categoría</label><select class="in" id="orderCat">${R.categories.map(c=>`<option value="${c.id}" ${selected===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}<option value="__none__" ${selected==='__none__'?'selected':''}>Sin categoría</option></select></div>
-    <div class="stack">${items.map((r,i)=>`<div class="rowx card" style="padding:8px 10px"><span class="num muted" style="width:28px">${i+1}.</span><b style="flex:1">${esc(r.name)}</b><button class="x" data-rup="${r.id}" aria-label="Subir" ${i===0?'disabled':''}>▲</button><button class="x" data-rdown="${r.id}" aria-label="Bajar" ${i===items.length-1?'disabled':''}>▼</button></div>`).join('')||'<span class="muted">No hay recetas en esta categoría.</span>'}</div>
+    P.innerHTML=`<h2>Ordenar recetas de ${esc(curR.name)}</h2><span class="muted small">Elige la categoría. Luego mantén presionada una receta y arrástrala a donde va. Se guarda sola.</span>
+    <div class="rowx" style="gap:6px">${[...R.categories.map(c=>[c.id,c.name]),['__none__','Sin categoría']].map(([id,n])=>`<button type="button" class="tab" data-ocat="${id}" aria-selected="${selected===id}">${esc(n)}</button>`).join('')}</div>
+    <div class="stack" id="recOrdList">${items.map((r,i)=>`<div class="rowx card" data-ri="${i}" style="padding:10px 12px;flex-wrap:nowrap"><span class="grip">☰</span><span class="num muted" style="width:28px">${i+1}.</span><b style="flex:1">${esc(r.name)}</b></div>`).join('')||'<span class="muted">No hay recetas en esta categoría.</span>'}</div>
     <div class="rowx"><span class="sp"></span><button class="btn ghost" id="recipeOrderDone">Listo</button></div>`;
-    $('#orderCat').onchange=e=>{selected=e.target.value;draw()};
+    P.querySelectorAll('[data-ocat]').forEach(b=>b.onclick=()=>{selected=b.dataset.ocat;draw()});
+    dragSort($('#recOrdList'),'[data-ri]','y',(i,t)=>{const peers=items;const a=R.recipes.indexOf(peers[i]);const moved=R.recipes.splice(a,1)[0];const rest=peers.filter(x=>x!==moved);const anchor=t<rest.length?rest[t]:null;
+      if(anchor)R.recipes.splice(R.recipes.indexOf(anchor),0,moved);else{const last=rest[rest.length-1];R.recipes.splice(last?R.recipes.indexOf(last)+1:R.recipes.length,0,moved)}saveR(curR.id);draw()});
     const move=(id,delta)=>{const peers=R.recipes.filter(r=>selected?(selected==='__none__'?!R.categories.some(c=>c.id===r.cat):r.cat===selected):true),p=peers.findIndex(r=>r.id===id),q=p+delta;if(p<0||q<0||q>=peers.length)return;const a=R.recipes.indexOf(peers[p]),b=R.recipes.indexOf(peers[q]);[R.recipes[a],R.recipes[b]]=[R.recipes[b],R.recipes[a]];saveR(curR.id);draw()};
-    P.querySelectorAll('[data-rup]').forEach(b=>b.onclick=()=>move(b.dataset.rup,-1));P.querySelectorAll('[data-rdown]').forEach(b=>b.onclick=()=>move(b.dataset.rdown,1));
+
     $('#recipeOrderDone').onclick=()=>{$('#genSheet').hidden=true;renderRest()};
   };draw();$('#genSheet').hidden=false;
 }
