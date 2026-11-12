@@ -364,7 +364,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.7.6</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.7.7</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -520,7 +520,7 @@ async function delDoc(k){try{localStorage.removeItem('jbapp_'+k)}catch(e){}if(db
 const saveMeta=()=>save('meta',S.meta);
 const saveR=(id,now)=>{const p=save('r_'+id,S.r[id],now);if(id===socRid())socialSoon();return p};
 function fixR(d){
-  const R=Object.assign({ingredients:[],recipes:[],categories:[],compras:[],sales:[],ledger:[],settings:{error:S.meta.settings.error,target:S.meta.settings.target}},d||{});
+  const R=Object.assign({ingredients:[],recipes:[],categories:[],compras:[],comprasDel:[],sales:[],ledger:[],settings:{error:S.meta.settings.error,target:S.meta.settings.target}},d||{});
   if(R.settings.opex==null)R.settings.opex=0;
   // migración: categorías que antes eran texto
   R.recipes.forEach(r=>{if(r.category&&!r.cat){let c=R.categories.find(x=>norm(x.name)===norm(r.category));if(!c){c={id:uid(),name:r.category};R.categories.push(c)}r.cat=c.id}delete r.category});
@@ -1052,7 +1052,7 @@ function renderShop(){
   const sq=$('#shopQ');sq.oninput=()=>{shopQ=sq.value;renderShop();setTimeout(()=>{const x=$('#shopQ');x.focus();x.setSelectionRange(x.value.length,x.value.length)},20)};
   B.querySelectorAll('[data-it]').forEach(b=>b.onclick=()=>{const [rid,id]=b.dataset.it.split('|');openItem(rid,id)});
   $('#shopAdd').onclick=()=>openAddItem();
-  const cd=$('#clrDone');if(cd)cd.onclick=()=>{const rids=shopR==='all'?RS.map(r=>r.id):[shopR];rids.forEach(rid=>{const R=S.r[rid];R.compras.filter(i=>i.done&&i.img).forEach(i=>delDoc('img_'+i.img));R.compras=R.compras.filter(i=>!i.done);saveR(rid)});renderShop()};
+  const cd=$('#clrDone');if(cd)cd.onclick=()=>{const rids=shopR==='all'?RS.map(r=>r.id):[shopR];rids.forEach(rid=>{const R=S.r[rid];R.compras.filter(i=>i.done&&i.img).forEach(i=>delDoc('img_'+i.img));R.comprasDel=[...(R.comprasDel||[]),...R.compras.filter(i=>i.done).map(i=>i.id)].slice(-400);R.compras=R.compras.filter(i=>!i.done);saveR(rid)});renderShop()};
 }
 function openItem(rid,id){
   const R=S.r[rid],r=restById(rid),x=R.compras.find(i=>i.id===id);if(!x)return;const P=$('#genPane');
@@ -1066,7 +1066,7 @@ function openItem(rid,id){
    P.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{x.qty=Math.max(1,(x.qty||1)+(+b.dataset.st));saveR(rid);draw()});
    $('#ppBuy').onclick=()=>{x.done=!x.done;saveR(rid);blip(x.done?1200:600);if(x.done){$('#genSheet').hidden=true;toast('¡Comprado!');renderShop()}else draw()};
    $('#ppClose').onclick=()=>{$('#genSheet').hidden=true;renderShop()};
-   $('#ppDel').onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='¿Seguro?';return}if(x.img)delDoc('img_'+x.img);R.compras=R.compras.filter(i=>i.id!==id);saveR(rid);$('#genSheet').hidden=true;renderShop()}};
+   $('#ppDel').onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='¿Seguro?';return}if(x.img)delDoc('img_'+x.img);R.comprasDel=[...(R.comprasDel||[]),id].slice(-400);R.compras=R.compras.filter(i=>i.id!==id);saveR(rid);$('#genSheet').hidden=true;renderShop()}};
   draw();$('#genSheet').hidden=false;blip(900,.04);
 }
 function openAddItem(){
@@ -1638,7 +1638,8 @@ let socT=null,socBusy=false,socAgain=false;
 function socialSoon(){clearTimeout(socT);socT=setTimeout(socialSync,1500)}
 const socQty=x=>String(x.qty||1)+(x.note?' · '+x.note:'');
 async function socialSync(){
-  const rid=socRid();if(!rid||!S.r[rid])return;if(socBusy){socAgain=true;return}socBusy=true;
+  const rid=socRid();if(!rid||!S.r[rid])return;if(!window.claude&&!(CL.ses&&CL.since))return; // solo con la nube al día
+  if(socBusy){socAgain=true;return}socBusy=true;
   try{
     const st=await (await fetch(SOCIAL_APP,{cache:'no-store'})).json();
     const R=S.r[rid];R.compras=R.compras||[];
@@ -1651,15 +1652,18 @@ async function socialSync(){
     if(mark){save('r_'+rid,R);try{if(!$('#shop').hidden)renderShop()}catch(e){}toast('El capitán compró cosas de tu Shopin')}
     // 2) lo pendiente de Shopin va a la carga abierta del capitán
     let open=mine.find(r=>!r.sent);const cur=open?open.items||[]:[];const items=[];
+    const del=new Set((R.comprasDel||[]).map(id=>'jb-'+id));const inAny=new Set(mine.flatMap(r=>(r.items||[]).map(i=>i.id)));
     cur.forEach(it=>{const x=R.compras.find(c=>'jb-'+c.id===it.id);
-      if(it.status!=='pending')items.push(it);               // ya lo marcó el capitán: se respeta
-      else if(x&&!x.done)items.push({...it,name:x.name,qty:socQty(x)}); // sigue pendiente (con cambios)
+      if(it.status!=='pending')items.push(it);                         // ya lo marcó el capitán: se respeta
+      else if(x&&x.done)items.push({...it,status:'bought'});          // tú lo marcaste comprado
+      else if(x)items.push({...it,name:x.name,qty:socQty(x)});        // sigue pendiente (con cambios)
+      else if(!del.has(it.id))items.push(it);                         // este aparato no lo conoce: se deja quieto
     });
-    R.compras.filter(x=>!x.done&&!items.some(it=>it.id==='jb-'+x.id)).forEach(x=>items.push({id:'jb-'+x.id,zone:'Shopin',name:x.name,qty:socQty(x),status:'pending'}));
+    R.compras.filter(x=>!x.done&&!items.some(it=>it.id==='jb-'+x.id)&&!inAny.has('jb-'+x.id)).forEach(x=>items.push({id:'jb-'+x.id,zone:'Shopin',name:x.name,qty:socQty(x),status:'pending'}));
     if(open&&JSON.stringify(cur)===JSON.stringify(items))return;
     if(!open&&!items.length)return;
     const body={del:{},reqs:[]};
-    if(open&&!items.length)body.del[open.id]=Date.now();
+    if(open&&!items.length&&cur.every(it=>del.has(it.id)))body.del[open.id]=Date.now();else if(open&&!items.length)return;
     else{if(!open)open={id:'jb-'+Date.now().toString(36),from:(S.meta.settings.user||'Juan Beltran')+' · Shopin',date:new Date().toISOString(),sent:false,note:'',memo:'Enviado desde la app de Juan Beltran'};
       body.reqs.push({...open,items,u:Date.now()})}
     await fetch(SOCIAL_APP,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({state:body})});
