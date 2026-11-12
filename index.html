@@ -259,6 +259,7 @@ td .in{padding:6px 8px;border-radius:8px}
 .stepper b{min-width:34px;text-align:center}
 .eline{background:var(--panel);border-radius:14px;box-shadow:var(--shadow);padding:12px;display:flex;flex-direction:column;gap:8px}
 .egrid{display:grid;grid-template-columns:1.2fr .8fr 1.2fr;gap:8px}
+.syncdot{width:14px;height:14px;border-radius:50%;background:#2ecc71;flex:none;box-shadow:0 0 0 4px color-mix(in srgb,#2ecc71 25%,transparent)}.syncdot[data-st="pend"]{background:#E2B53E}.syncdot[data-st="err"],.syncdot[data-st="off"]{background:#c0392b}
 .ubtn{min-width:56px;padding:8px 12px;border-radius:999px;border:0;background:#173C32;color:#F3EBDD;font:inherit;font-weight:800;font-size:14px;cursor:pointer}
 .ubtn::after{content:" ▾";opacity:.7;font-size:11px}
 .packw{display:inline-flex;align-items:center;gap:6px}.usfx{font-weight:800;font-size:13px;color:#B8913A;min-width:22px}
@@ -361,7 +362,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.10</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.7.0</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1369,14 +1370,15 @@ function renderIdeasKeep(t,l){renderIdeas();setTimeout(()=>{$('#idText').value=t
 function renderSettings(){
   const st=S.meta.settings,B=$('#setBody');
   const sw=(k,t,d)=>`<div class="setrow"><div class="t"><b>${t}</b><small>${d}</small></div><button class="switch" role="switch" data-sw="${k}" aria-checked="${!!st[k]}" aria-label="${t}"></button></div>`;
-  B.innerHTML=`<div class="stack wrapmax">
+  B.innerHTML=`<div class="stack wrapmax">${window.claude?'':cloudCard()}
    <div class="card"><h2 class="sec">Tema</h2><div class="setrow"><div class="t"><b>Apariencia</b><small>Blanco o negro, como la consola</small></div><div class="seg">${[['system','Sistema'],['light','Blanco'],['dark','Negro']].map(([k,v])=>`<button data-th="${k}" aria-pressed="${st.theme===k}">${v}</button>`).join('')}</div></div>
     ${sw('sound','Sonidos de navegación','Clics suaves al moverte y abrir cosas')}${sw('oz','Líquidos en onzas','Las cantidades en ml de las recetas se muestran en oz (1 oz = 30 ml)')}</div>
    <div class="card"><h2 class="sec">Notificaciones</h2>${sw('taskDot','Punto en Tareas','Se enciende cuando una tarea es para hoy o está vencida')}${sw('debtDot','Punto en Controles','Se enciende cuando algún restaurante te debe')}</div>
    <div class="card stack"><h2 class="sec">Perfil y valores por defecto</h2><div class="grid3"><div class="field"><label for="stUser">Nombre arriba</label><input class="in" id="stUser" value="${esc(st.user)}"></div><div class="field"><label for="stErr">Margen de error % (nuevos restaurantes)</label><input class="in num" id="stErr" inputmode="decimal" value="${st.error}"></div><div class="field"><label for="stTar">Margen objetivo % (nuevos)</label><input class="in num" id="stTar" inputmode="decimal" value="${st.target}"></div></div></div>
    ${db?'':`<div class="card stack"><h2 class="sec">Datos publicados</h2><span class="muted small">Vuelve a cargar los restaurantes, recetas y eventos que Claude publicó con la última versión de la app. Reemplaza lo que tienes en este dispositivo.</span><div class="rowx"><button class="btn" id="pubLoad">Cargar datos publicados</button></div><div class="rowx" id="pubConfirm" hidden><span class="small" style="color:var(--bad)">Esto reemplaza todo lo de este dispositivo.</span><span class="sp"></span><button class="btn sm ghost" id="pubNo">Cancelar</button><button class="btn sm danger" id="pubYes">Reemplazar</button></div></div>`}
    <div class="card stack"><h2 class="sec">Copia de seguridad</h2><span class="muted small">Descarga todo (restaurantes, recetas, eventos, controles) en un archivo para guardarlo o pasarlo a la versión 1.0.</span><div class="rowx"><button class="btn" id="bkDown">Descargar copia</button><label class="btn ghost">Restaurar copia<input type="file" id="bkUp" accept=".json" hidden></label></div><div class="rowx" id="bkConfirm" hidden><span class="small" style="color:var(--bad)">Esto reemplaza todo lo que hay ahora.</span><span class="sp"></span><button class="btn sm ghost" id="bkNo">Cancelar</button><button class="btn sm danger" id="bkYes">Reemplazar</button></div></div>
-   <div class="card"><div class="setrow"><div class="t"><b>Versión</b><small>Demo 0.6 · los datos se guardan en tu cuenta de Claude</small></div></div></div></div>`;
+   <div class="card"><div class="setrow"><div class="t"><b>Versión</b><small>0.7 · ${window.claude?'los datos se guardan en tu cuenta de Claude':CL.ses?'los datos se sincronizan en la nube ☁️':'los datos se guardan solo en este aparato'}</small></div></div></div></div>`;
+  if(!window.claude)bindCloudCard();
   B.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{st.theme=b.dataset.th;applyTheme();saveMeta();renderSettings()});
   B.querySelectorAll('[data-sw]').forEach(b=>b.onclick=()=>{st[b.dataset.sw]=!st[b.dataset.sw];saveMeta();blip(900);renderSettings()});
   $('#stUser').onchange=e=>{st.user=e.target.value.trim()||'Juan Beltran';saveMeta()};$('#stErr').onchange=e=>{st.error=nd(e.target.value);saveMeta()};$('#stTar').onchange=e=>{st.target=nd(e.target.value);saveMeta()};
@@ -1396,6 +1398,65 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.isComposing)return
 /* render diferido: evita que el blur de un input choque con el redibujo */
 renderRest=defer(renderRest);renderRecipe=defer(renderRecipe);renderSales=defer(renderSales);renderCtrl=defer(renderCtrl);renderEvents=defer(renderEvents);renderShop=defer(renderShop);renderTasks=defer(renderTasks);renderSettings=defer(renderSettings);renderIdeas=defer(renderIdeas);renderMood=defer(renderMood);
 function defer(f){let q=false;return()=>{if(q)return;q=true;setTimeout(()=>{q=false;f()},0)}}
+/* ---------- nube: sincronización con Supabase ---------- */
+const SB_URL='https://sopvoedhxwuwbmvkysua.supabase.co',SB_KEY='sb_publishable_KMKqGqxC27pXxKSufAf8QA_g5dqFKoH';
+const CL={ses:null,since:null,timer:null,busy:false,last:{},dirty:{},st:'off',uiDirty:false,err:''};
+try{CL.ses=JSON.parse(localStorage.getItem('jbsb_session')||'null');CL.since=localStorage.getItem('jbsb_since');CL.dirty=JSON.parse(localStorage.getItem('jbsb_dirty')||'{}')}catch(e){}
+const clSaveSes=()=>{try{CL.ses?localStorage.setItem('jbsb_session',JSON.stringify(CL.ses)):localStorage.removeItem('jbsb_session')}catch(e){}};
+const clSaveDirty=()=>{try{localStorage.setItem('jbsb_dirty',JSON.stringify(CL.dirty))}catch(e){}};
+async function sbAuth(path,body){const r=await fetch(SB_URL+'/auth/v1/'+path,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.msg||j.error_description||j.message||('error '+r.status)),{code:j.error_code||j.code||r.status});return j}
+const sesFrom=j=>({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+((j.expires_in||3600)-60)*1000,email:j.user?.email||CL.ses?.email||'',uid:j.user?.id||CL.ses?.uid||''});
+async function sbToken(){if(!CL.ses)throw new Error('sin sesión');if(Date.now()<CL.ses.expires_at)return CL.ses.access_token;
+  try{const j=await sbAuth('token?grant_type=refresh_token',{refresh_token:CL.ses.refresh_token});CL.ses=sesFrom(j);clSaveSes();return CL.ses.access_token}catch(e){if(e.code&&e.code!==0&&typeof e.code!=='number'||e.code===400||e.code===401){CL.ses=null;clSaveSes();CL.st='off';db=null;toast('La sesión de la nube se cerró: vuelve a entrar en Ajustes')}throw e}}
+async function sbRest(q,opt={}){const t=await sbToken();const r=await fetch(SB_URL+'/rest/v1/'+q,{...opt,headers:{apikey:SB_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json',...(opt.headers||{})}});if(!r.ok){const tx=await r.text();throw new Error(tx.slice(0,160)||('error '+r.status))}return r.status===204?null:r.json().catch(()=>null)}
+async function sbPut(k,data){CL.last[k]=JSON.stringify(data);await sbRest('docs?on_conflict=user_id,k',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:CL.ses.uid,k,data})})}
+const cloudDb={doc:path=>{const k=path.replace(/^app\//,'');return{
+  get:async()=>{const a=await sbRest('docs?select=data&k=eq.'+encodeURIComponent(k));const d=a&&a[0]?a[0].data:null;return{exists:d!=null,data:()=>d}},
+  set:async obj=>{try{await sbPut(k,obj);if(CL.dirty[k]){delete CL.dirty[k];clSaveDirty()}CL.st='ok'}catch(e){CL.dirty[k]=1;clSaveDirty();CL.st='pend';CL.err=e.message}},
+  delete:async()=>{try{await sbRest('docs?k=eq.'+encodeURIComponent(k),{method:'DELETE'})}catch(e){}}}}};
+const localKeys=()=>Object.keys(localStorage).filter(k=>k.startsWith('jbapp_')).map(k=>k.slice(6));
+// une dos versiones del mismo documento: listas con id se juntan (gana la nube), lo demás gana la nube
+function mergeDoc(a,b){if(a==null)return b;if(b==null)return a;if(Array.isArray(a)&&Array.isArray(b)){if(a.every(x=>x&&typeof x==='object'&&x.id)&&b.every(x=>x&&typeof x==='object'&&x.id)){const out=a.map(x=>{const y=b.find(z=>z.id===x.id);return y?mergeDoc(x,y):x});for(const y of b)if(!a.some(x=>x.id===y.id))out.push(y);return out}return a}
+  if(typeof a==='object'&&typeof b==='object'&&!Array.isArray(a)&&!Array.isArray(b)){const o={...b,...a};for(const k in a)if(k in b)o[k]=mergeDoc(a[k],b[k]);return o}return a}
+async function cloudFirstLink(){// junta lo que hay en este aparato con lo que ya está en la nube
+  const rows=await sbRest('docs?select=k,data,updated_at')||[];const srv={};let mx=null;for(const r of rows){srv[r.k]=r.data;if(!mx||r.updated_at>mx)mx=r.updated_at}
+  for(const k of localKeys()){const loc=lsGet(k);if(loc==null)continue;if(!(k in srv)){await sbPut(k,loc);continue}if(k.startsWith('img_'))continue;const m=mergeDoc(srv[k],loc);if(JSON.stringify(m)!==JSON.stringify(srv[k])){await sbPut(k,m);srv[k]=m}}
+  for(const k in srv){lsSet(k,srv[k]);CL.last[k]=JSON.stringify(srv[k])}
+  CL.since=null;localStorage.removeItem('jbsb_since');localStorage.setItem('jbsb_linked',CL.ses.uid)}
+async function cloudLogin(email,pass,signup){
+  const j=signup?await sbAuth('signup',{email,password:pass}):await sbAuth('token?grant_type=password',{email,password:pass});
+  if(!j.access_token){return 'confirm'}
+  CL.ses=sesFrom(j);clSaveSes();toast('Uniendo tus datos con la nube…');await cloudFirstLink();toast('¡Sincronizado!');setTimeout(()=>location.reload(),700);return 'ok'}
+function cloudLogout(){CL.ses=null;clSaveSes();localStorage.removeItem('jbsb_linked');localStorage.removeItem('jbsb_since');clearInterval(CL.timer);db=null;toast('Sesión cerrada en este aparato');setTimeout(()=>location.reload(),600)}
+function applyRemote(k,data){lsSet(k,data);CL.last[k]=JSON.stringify(data);
+  if(k==='meta'){S.meta=Object.assign({restaurants:[]},data);S.meta.settings=Object.assign({...DEF_SET},data.settings||{});if(curR)curR=restById(curR.id)||curR;applyTheme()}
+  else if(['tasks','events','boards','ideas'].includes(k)){if(data?.items)S[k]=data;if(k==='events'&&curEv)curEv=S.events.items.find(e=>e.id===curEv.id)||curEv}
+  else if(k.startsWith('r_')){const id=k.slice(2);S.r[id]=fixR(data);if(curRec&&curR&&curR.id===id)curRec=S.r[id].recipes.find(x=>x.id===curRec.id)||curRec}
+  else if(k.startsWith('img_')){imgCache[k.slice(4)]=data?.data||null}
+  CL.uiDirty=true}
+function cloudRerender(){if(!CL.uiDirty)return;const a=document.activeElement;if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))return;if(!$('#genSheet').hidden)return;
+  const cur=$$('.screen').find(s=>!s.hidden);const id=cur?.id;CL.uiDirty=false;
+  const f={home:renderHome,rest:renderRest,recipe:renderRecipe,tasks:renderTasks,shop:renderShop,mood:renderMood,events:renderEvents,sales:renderSales,ctrl:renderCtrl,ideas:renderIdeas}[id];
+  try{if(f)f();if(id!=='home'&&typeof renderHome==='function'&&$('#home'))renderHome()}catch(e){console.warn(e)}}
+async function cloudPull(){if(!CL.ses||CL.busy||document.visibilityState==='hidden')return;CL.busy=true;
+  try{for(const k of Object.keys(CL.dirty)){const v=lsGet(k);if(v!=null)await cloudDb.doc('app/'+k).set(v);else{delete CL.dirty[k];clSaveDirty()}}
+    const rows=await sbRest('docs?select=k,data,updated_at&order=updated_at.asc'+(CL.since?'&updated_at=gt.'+encodeURIComponent(CL.since):''))||[];
+    for(const r of rows){CL.since=r.updated_at;if(pending[r.k]||CL.dirty[r.k])continue;const js=JSON.stringify(r.data);if(CL.last[r.k]===js)continue;applyRemote(r.k,r.data)}
+    if(CL.since)localStorage.setItem('jbsb_since',CL.since);CL.st=Object.keys(CL.dirty).length?'pend':'ok';cloudRerender()}catch(e){CL.st='err';CL.err=e.message}finally{CL.busy=false}
+  const dot=$('#syncDot');if(dot)dot.dataset.st=CL.st}
+function cloudStart(){clearInterval(CL.timer);CL.timer=setInterval(cloudPull,4000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloudPull()});addEventListener('online',cloudPull);addEventListener('focus',cloudPull);setTimeout(cloudPull,1500)}
+function cloudCard(){const s=CL.ses;
+  if(s)return `<div class="card stack"><h2 class="sec">Sincronización</h2><div class="setrow"><div class="t"><b>Conectado ☁️ ${esc(s.email||'')}</b><small id="syncTxt">${CL.st==='err'?'Sin conexión: se sube cuando vuelva internet':CL.st==='pend'?'Hay cambios esperando para subir…':'Todo sincronizado entre tus aparatos'}</small></div><span class="syncdot" id="syncDot" data-st="${CL.st}"></span></div><div class="rowx"><button class="btn ghost" id="clNow">Sincronizar ahora</button><span class="sp"></span><button class="btn ghost" id="clOut">Cerrar sesión aquí</button></div></div>`;
+  return `<div class="card stack" id="clCard"><h2 class="sec">Sincronización ☁️</h2><span class="muted small">Entra con tu correo y contraseña en cada aparato (iPhone y PC) y todo se mantiene igual en los dos, al instante. La primera vez se juntan los datos de este aparato con los de la nube.</span>
+   <div class="grid2"><div class="field"><label for="clMail">Correo</label><input class="in" id="clMail" type="email" inputmode="email" autocomplete="username" placeholder="tu@correo.com"></div><div class="field"><label for="clPass">Contraseña</label><input class="in" id="clPass" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres"></div></div>
+   <div class="rowx"><button class="btn" id="clIn" style="background:#173C32;color:#F3EBDD">Entrar</button><button class="btn ghost" id="clUp">Crear cuenta</button></div><small class="muted" id="clMsg"></small></div>`}
+function bindCloudCard(){const s=CL.ses;
+  if(s){$('#clNow').onclick=async()=>{CL.since=null;await cloudPull();toast(CL.st==='ok'?'Sincronizado':'No se pudo: '+CL.err)};$('#clOut').onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Toca otra vez para cerrar';return}cloudLogout()};return}
+  const go=async signup=>{const em=$('#clMail').value.trim(),pw=$('#clPass').value;const msg=$('#clMsg');if(!/^\S+@\S+\.\S+$/.test(em))return toast('Escribe tu correo');if(pw.length<6)return toast('La contraseña debe tener mínimo 6 caracteres');
+    msg.textContent=signup?'Creando cuenta…':'Entrando…';try{const r=await cloudLogin(em,pw,signup);if(r==='confirm')msg.textContent='Te llegó un correo de Supabase: ábrelo y toca el enlace para confirmar. Luego vuelve aquí y toca "Entrar".'}catch(e){msg.textContent=/confirm/i.test(e.message)?'Primero confirma tu correo con el enlace que te llegó.':/invalid/i.test(e.message)?'Correo o contraseña incorrectos.':/registered|exists/i.test(e.message)?'Ese correo ya tiene cuenta: toca "Entrar".':'No se pudo: '+e.message}};
+  $('#clIn').onclick=()=>go(false);$('#clUp').onclick=()=>go(true)}
+// enlace de confirmación del correo: trae la sesión en la dirección
+(function(){const h=location.hash;if(!/access_token=/.test(h))return;const p=new URLSearchParams(h.slice(1));const at=p.get('access_token'),rt=p.get('refresh_token');if(at&&rt){CL.ses={access_token:at,refresh_token:rt,expires_at:Date.now()+(+p.get('expires_in')||3600)*1000-60000,email:'',uid:''};try{const pl=JSON.parse(atob(at.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));CL.ses.uid=pl.sub;CL.ses.email=pl.email||''}catch(e){}clSaveSes();localStorage.removeItem('jbsb_linked')}history.replaceState(null,'',location.pathname+location.search)})();
 /* ---------- arranque ---------- */
 const bar=p=>{const e=$('#splash');if(e&&!e.classList.contains('on'))e.style.setProperty('--b',(0.07+p/100*0.2).toFixed(3))};
 let started=false;
@@ -1420,6 +1481,7 @@ async function migrateMiradorData(){
 async function boot(){
   const t0=Date.now();bar(12);
   try{db=window.claude?await withTimeout(window.claude.use('db'),5000):null}catch(e){console.warn('db',e);db=null}
+  if(!db&&CL.ses){try{await withTimeout(sbToken(),6000);if(localStorage.getItem('jbsb_linked')!==CL.ses.uid)await withTimeout(cloudFirstLink(),20000);db=cloudDb;cloudStart()}catch(e){console.warn('nube',e);if(CL.ses){db=cloudDb;cloudStart()}}}
   bar(35);await seedLocal();
   try{
     const [m,t,ev,bo,idd]=await Promise.all([readDoc('meta'),readDoc('tasks'),readDoc('events'),readDoc('boards'),readDoc('ideas')]);
