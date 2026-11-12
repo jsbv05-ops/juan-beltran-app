@@ -362,7 +362,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.7.0</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.7.1</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -508,7 +508,7 @@ let db=null;const timers={};
 const lsGet=k=>{try{const v=localStorage.getItem('jbapp_'+k);return v?JSON.parse(v):null}catch(e){return null}};
 const lsSet=(k,v)=>{try{localStorage.setItem('jbapp_'+k,JSON.stringify(v))}catch(e){}};
 const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);
-async function readDoc(k){if(db){try{const s=await withTimeout(db.doc('app/'+k).get(),5000);const ex=typeof s?.exists==='function'?s.exists():s?.exists;const d=ex?s.data():null;return d==null?null:JSON.parse(JSON.stringify(d))}catch(e){console.warn('readDoc',k,e);return lsGet(k)}}return lsGet(k)}
+async function readDoc(k){if(db&&db===window.__jbCloud){const v=lsGet(k);if(v!=null)return v}if(db){try{const s=await withTimeout(db.doc('app/'+k).get(),5000);const ex=typeof s?.exists==='function'?s.exists():s?.exists;const d=ex?s.data():null;return d==null?null:JSON.parse(JSON.stringify(d))}catch(e){console.warn('readDoc',k,e);return lsGet(k)}}return lsGet(k)}
 const pending={};
 function save(k,obj,now=false){clearTimeout(timers[k]);lsSet(k,obj);const run=async()=>{delete pending[k];lsSet(k,obj);if(db){try{await db.doc('app/'+k).set(JSON.parse(JSON.stringify(obj)))}catch(e){toast('No se pudo guardar: '+(e.code||'error'))}}};pending[k]=run;if(now)return run();timers[k]=setTimeout(run,350)}
 function flushSaves(){for(const k in pending){clearTimeout(timers[k]);pending[k]()}}
@@ -757,9 +757,9 @@ function renderRecipe(){
     <div class="kpi"><small>Aporte a gastos operativos (<span data-o="opex">${pct(c.opex)}</span>) / porción</small><b class="num" data-o="contrib">${money(c.opexAmt)}</b></div>
     <div class="kpi"><small>Ganancia / porción</small><b class="num" data-o="net">${money(c.net)}</b></div><div class="kpi hl"><small>Margen de ganancia</small><b class="num" data-o="margin">${pct(c.margin)}</b></div>
     <div class="kpi"><small>Ganancia por tanda (<span data-o="portions">${c.portions}</span>)</small><b class="num" data-o="netTotal">${money(c.netTotal)}</b></div><div class="kpi"><small>Precio sugerido (ganancia <span data-o="target">${pct(c.target)}</span> + gastos <span data-o="opex">${pct(c.opex)}</span>)</small><b class="num" data-o="suggested">${money(c.suggested)}</b> <button class="btn sm ghost" id="useSug" style="margin-top:6px">Usar</button></div>`}</div>
-   <div class="stack" style="gap:7px"><h2 class="sec">Ingredientes y subrecetas</h2><div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" id="addSearch" type="search" placeholder="Buscar y tocar para añadir materia prima o subreceta…" autocomplete="off" style="padding-left:42px"><div class="add-results" id="addResults" hidden></div></div></div>
+   <div class="stack" style="gap:7px"><h2 class="sec">Ingredientes y subrecetas</h2><div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" id="addSearch" type="search" placeholder="Buscar materia prima, subreceta o receta…" autocomplete="off" style="padding-left:42px"><div class="add-results" id="addResults" hidden></div></div></div>
    <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo/unidad</th><th>Costo en receta</th><th>% participación</th><th></th></tr></thead><tbody>
-   ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}${l.subrecipe?' · Subreceta':''}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${qShow(l.ing,l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(uShow(l.ing))}</td><td class="num">${money(ucShow(l.ing,l.uc))}${!l.subrecipe&&(!l.ing||nd(l.ing.price)<=0)?' <span class="miss-dot" title="Sin precio">⚠</span>':''}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
+   ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}${l.subrecipe?(norm(catName(R,recipeById(R,l.it.ing)?.cat))==='subrecetas'?' · Subreceta':' · Receta'):''}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${qShow(l.ing,l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(uShow(l.ing))}</td><td class="num">${money(ucShow(l.ing,l.uc))}${!l.subrecipe&&(!l.ing||nd(l.ing.price)<=0)?' <span class="miss-dot" title="Sin precio">⚠</span>':''}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
    <tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num"><b data-o="base">${money(c.base)}</b></td><td class="num">100%</td><td></td></tr></tbody></table></div>
    <div class="rowx"><button class="btn ghost" id="dupRec">Duplicar receta</button><span class="sp"></span><button class="btn danger" id="delRec">Eliminar receta</button></div></div>`;
   const sv=()=>saveR(curR.id);
@@ -769,9 +769,9 @@ function renderRecipe(){
   const bind=(id,f,kind='',nullable=false)=>{const el=$(id);const upd=()=>{const v=el.value;r[f]=nullable&&v===''?null:(kind==='money'?pm(v):kind?nd(v):(v||null));sv();if(f==='cat'){renderRecipe();return}refresh();if(f==='name')$('#reTitle').textContent=r.name||'Receta'};if(el.tagName==='SELECT')el.onchange=upd;else{el.oninput=upd;el.onchange=upd}};
   bind('#fName','name');bind('#fCat','cat');bind('#fPor','portions','n');bind('#fErr','error','n',true);if(!isSubrecipe){bind('#fPrice','price','money');bind('#fTar','target','n',true);bind('#fOpx','opex','n',true);$('#useSug').onclick=()=>{r.price=Math.ceil(c.suggested/100)*100;sv();renderRecipe()}}
   const addResults=$('#addResults'),addSearch=$('#addSearch');
-  const paintsAddResults=()=>{const q=norm(addSearch.value),mp=R.ingredients.filter(i=>!q||norm(i.name).includes(q)).slice(0,80),subs=R.recipes.filter(x=>norm(catName(R,x.cat))==='subrecetas'&&x.id!==r.id&&!recipeDependsOn(x.id,r.id,R)&&(!q||norm(x.name).includes(q))).slice(0,80);
+  const paintsAddResults=()=>{const q=norm(addSearch.value),mp=R.ingredients.filter(i=>!q||norm(i.name).includes(q)).slice(0,80),subs=R.recipes.filter(x=>x.id!==r.id&&!recipeDependsOn(x.id,r.id,R)&&(!q||norm(x.name).includes(q))).sort((a,b)=>(norm(catName(R,b.cat))==='subrecetas')-(norm(catName(R,a.cat))==='subrecetas')).slice(0,80);
     const raw=addSearch.value.trim(),exact=raw&&R.ingredients.some(i=>norm(i.name)===norm(raw));
-    addResults.innerHTML=(raw&&!exact?`<button type="button" data-add-new="1" class="add-new"><span>Crear “${esc(raw)}”<small>Nueva materia prima · se guarda en la MP y se añade a esta receta</small></span><b class="add-action">+ Crear</b></button>`:'')+[...mp.map(i=>`<button type="button" data-add-type="ingredient" data-add-id="${i.id}"><span>${esc(i.name||'(sin nombre)')}<small>Materia prima · ${esc(uShow(i))}${nd(i.price)>0?` · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}`:' · sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`),...subs.map(x=>`<button type="button" data-add-type="recipe" data-add-id="${x.id}"><span>${esc(x.name)}<small>Subreceta · ${money(recipeCostPerPortion(x,R))}/porción</small></span><b class="add-action">+ Añadir</b></button>`)].join('')||'<div class="muted small" style="padding:10px">No hay coincidencias.</div>';addResults.hidden=false;
+    addResults.innerHTML=(raw&&!exact?`<button type="button" data-add-new="1" class="add-new"><span>Crear “${esc(raw)}”<small>Nueva materia prima · se guarda en la MP y se añade a esta receta</small></span><b class="add-action">+ Crear</b></button>`:'')+[...mp.map(i=>`<button type="button" data-add-type="ingredient" data-add-id="${i.id}"><span>${esc(i.name||'(sin nombre)')}<small>Materia prima · ${esc(uShow(i))}${nd(i.price)>0?` · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}`:' · sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`),...subs.map(x=>`<button type="button" data-add-type="recipe" data-add-id="${x.id}"><span>${esc(x.name)}<small>${norm(catName(R,x.cat))==='subrecetas'?'Subreceta':'Receta'+(catName(R,x.cat)?' · '+esc(catName(R,x.cat)):'')} · costo ${money(recipeCostPerPortion(x,R))}/porción (con margen de error)</small></span><b class="add-action">+ Añadir</b></button>`)].join('')||'<div class="muted small" style="padding:10px">No hay coincidencias.</div>';addResults.hidden=false;
     const nb=addResults.querySelector('[data-add-new]');if(nb)nb.onclick=()=>{addResults.hidden=true;newIngSheet(raw,ing=>{r.items.push({ing:ing.id,qty:0,type:'ingredient'});sv();addSearch.value='';renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},60)})};
     addResults.querySelectorAll('[data-add-id]').forEach(b=>b.onclick=()=>{const type=b.dataset.addType,id=b.dataset.addId;if(type==='recipe'&&recipeDependsOn(id,r.id,R))return toast('Esa subreceta depende de esta receta y crearía un ciclo');r.items.push({ing:id,qty:0,type});sv();addSearch.value='';addResults.hidden=true;renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},30)});
   };
@@ -1400,6 +1400,7 @@ renderRest=defer(renderRest);renderRecipe=defer(renderRecipe);renderSales=defer(
 function defer(f){let q=false;return()=>{if(q)return;q=true;setTimeout(()=>{q=false;f()},0)}}
 /* ---------- nube: sincronización con Supabase ---------- */
 const SB_URL='https://sopvoedhxwuwbmvkysua.supabase.co',SB_KEY='sb_publishable_KMKqGqxC27pXxKSufAf8QA_g5dqFKoH';
+const stableStr=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,kk)=>(o[kk]=x[kk],o),{}):x);
 const CL={ses:null,since:null,timer:null,busy:false,last:{},dirty:{},st:'off',uiDirty:false,err:''};
 try{CL.ses=JSON.parse(localStorage.getItem('jbsb_session')||'null');CL.since=localStorage.getItem('jbsb_since');CL.dirty=JSON.parse(localStorage.getItem('jbsb_dirty')||'{}')}catch(e){}
 const clSaveSes=()=>{try{CL.ses?localStorage.setItem('jbsb_session',JSON.stringify(CL.ses)):localStorage.removeItem('jbsb_session')}catch(e){}};
@@ -1409,8 +1410,8 @@ const sesFrom=j=>({access_token:j.access_token,refresh_token:j.refresh_token,exp
 async function sbToken(){if(!CL.ses)throw new Error('sin sesión');if(Date.now()<CL.ses.expires_at)return CL.ses.access_token;
   try{const j=await sbAuth('token?grant_type=refresh_token',{refresh_token:CL.ses.refresh_token});CL.ses=sesFrom(j);clSaveSes();return CL.ses.access_token}catch(e){if(e.code&&e.code!==0&&typeof e.code!=='number'||e.code===400||e.code===401){CL.ses=null;clSaveSes();CL.st='off';db=null;toast('La sesión de la nube se cerró: vuelve a entrar en Ajustes')}throw e}}
 async function sbRest(q,opt={}){const t=await sbToken();const r=await fetch(SB_URL+'/rest/v1/'+q,{...opt,headers:{apikey:SB_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json',...(opt.headers||{})}});if(!r.ok){const tx=await r.text();throw new Error(tx.slice(0,160)||('error '+r.status))}return r.status===204?null:r.json().catch(()=>null)}
-async function sbPut(k,data){CL.last[k]=JSON.stringify(data);await sbRest('docs?on_conflict=user_id,k',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:CL.ses.uid,k,data})})}
-const cloudDb={doc:path=>{const k=path.replace(/^app\//,'');return{
+async function sbPut(k,data){CL.last[k]=stableStr(data);await sbRest('docs?on_conflict=user_id,k',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:CL.ses.uid,k,data})})}
+const cloudDb=window.__jbCloud={doc:path=>{const k=path.replace(/^app\//,'');return{
   get:async()=>{const a=await sbRest('docs?select=data&k=eq.'+encodeURIComponent(k));const d=a&&a[0]?a[0].data:null;return{exists:d!=null,data:()=>d}},
   set:async obj=>{try{await sbPut(k,obj);if(CL.dirty[k]){delete CL.dirty[k];clSaveDirty()}CL.st='ok'}catch(e){CL.dirty[k]=1;clSaveDirty();CL.st='pend';CL.err=e.message}},
   delete:async()=>{try{await sbRest('docs?k=eq.'+encodeURIComponent(k),{method:'DELETE'})}catch(e){}}}}};
@@ -1421,14 +1422,14 @@ function mergeDoc(a,b){if(a==null)return b;if(b==null)return a;if(Array.isArray(
 async function cloudFirstLink(){// junta lo que hay en este aparato con lo que ya está en la nube
   const rows=await sbRest('docs?select=k,data,updated_at')||[];const srv={};let mx=null;for(const r of rows){srv[r.k]=r.data;if(!mx||r.updated_at>mx)mx=r.updated_at}
   for(const k of localKeys()){const loc=lsGet(k);if(loc==null)continue;if(!(k in srv)){await sbPut(k,loc);continue}if(k.startsWith('img_'))continue;const m=mergeDoc(srv[k],loc);if(JSON.stringify(m)!==JSON.stringify(srv[k])){await sbPut(k,m);srv[k]=m}}
-  for(const k in srv){lsSet(k,srv[k]);CL.last[k]=JSON.stringify(srv[k])}
+  for(const k in srv){lsSet(k,srv[k]);CL.last[k]=stableStr(srv[k])}
   CL.since=null;localStorage.removeItem('jbsb_since');localStorage.setItem('jbsb_linked',CL.ses.uid)}
 async function cloudLogin(email,pass,signup){
   const j=signup?await sbAuth('signup',{email,password:pass}):await sbAuth('token?grant_type=password',{email,password:pass});
   if(!j.access_token){return 'confirm'}
   CL.ses=sesFrom(j);clSaveSes();toast('Uniendo tus datos con la nube…');await cloudFirstLink();toast('¡Sincronizado!');setTimeout(()=>location.reload(),700);return 'ok'}
 function cloudLogout(){CL.ses=null;clSaveSes();localStorage.removeItem('jbsb_linked');localStorage.removeItem('jbsb_since');clearInterval(CL.timer);db=null;toast('Sesión cerrada en este aparato');setTimeout(()=>location.reload(),600)}
-function applyRemote(k,data){lsSet(k,data);CL.last[k]=JSON.stringify(data);
+function applyRemote(k,data){lsSet(k,data);CL.last[k]=stableStr(data);
   if(k==='meta'){S.meta=Object.assign({restaurants:[]},data);S.meta.settings=Object.assign({...DEF_SET},data.settings||{});if(curR)curR=restById(curR.id)||curR;applyTheme()}
   else if(['tasks','events','boards','ideas'].includes(k)){if(data?.items)S[k]=data;if(k==='events'&&curEv)curEv=S.events.items.find(e=>e.id===curEv.id)||curEv}
   else if(k.startsWith('r_')){const id=k.slice(2);S.r[id]=fixR(data);if(curRec&&curR&&curR.id===id)curRec=S.r[id].recipes.find(x=>x.id===curRec.id)||curRec}
@@ -1440,8 +1441,10 @@ function cloudRerender(){if(!CL.uiDirty)return;const a=document.activeElement;if
   try{if(f)f();if(id!=='home'&&typeof renderHome==='function'&&$('#home'))renderHome()}catch(e){console.warn(e)}}
 async function cloudPull(){if(!CL.ses||CL.busy||document.visibilityState==='hidden')return;CL.busy=true;
   try{for(const k of Object.keys(CL.dirty)){const v=lsGet(k);if(v!=null)await cloudDb.doc('app/'+k).set(v);else{delete CL.dirty[k];clSaveDirty()}}
+    const ae=document.activeElement;const typing=ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)||!$('#genSheet').hidden||Object.keys(pending).length;
+    if(typing){CL.busy=false;return}
     const rows=await sbRest('docs?select=k,data,updated_at&order=updated_at.asc'+(CL.since?'&updated_at=gt.'+encodeURIComponent(CL.since):''))||[];
-    for(const r of rows){CL.since=r.updated_at;if(pending[r.k]||CL.dirty[r.k])continue;const js=JSON.stringify(r.data);if(CL.last[r.k]===js)continue;applyRemote(r.k,r.data)}
+    for(const r of rows){if(pending[r.k]||CL.dirty[r.k])continue;CL.since=r.updated_at;const js=stableStr(r.data);if(CL.last[r.k]===js||stableStr(lsGet(r.k))===js){CL.last[r.k]=js;continue}applyRemote(r.k,r.data)}
     if(CL.since)localStorage.setItem('jbsb_since',CL.since);CL.st=Object.keys(CL.dirty).length?'pend':'ok';cloudRerender()}catch(e){CL.st='err';CL.err=e.message}finally{CL.busy=false}
   const dot=$('#syncDot');if(dot)dot.dataset.st=CL.st}
 function cloudStart(){clearInterval(CL.timer);CL.timer=setInterval(cloudPull,4000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloudPull()});addEventListener('online',cloudPull);addEventListener('focus',cloudPull);setTimeout(cloudPull,1500)}
