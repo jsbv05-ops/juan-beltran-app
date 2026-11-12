@@ -262,7 +262,7 @@ td .in{padding:6px 8px;border-radius:8px}
 .syncdot{width:14px;height:14px;border-radius:50%;background:#2ecc71;flex:none;box-shadow:0 0 0 4px color-mix(in srgb,#2ecc71 25%,transparent)}.syncdot[data-st="pend"]{background:#E2B53E}.syncdot[data-st="err"],.syncdot[data-st="off"]{background:#c0392b}
 .afx{position:relative;display:inline-flex;align-items:center;max-width:100%}.field>.afx,.grid2 .afx,.egrid .afx{display:flex;width:100%}.afx>input{width:100%;min-width:0}
 .afx>i{position:absolute;font-style:normal;font-weight:800;color:#B8913A;pointer-events:none;font-size:.95em}.afx-l>i{left:12px}.afx-l>input{padding-left:26px!important}.afx-r>i{right:12px}.afx-r>input{padding-right:30px!important}
-.tile,[data-ci],[data-ri]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.tile,[data-ci],[data-ri]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}.tile img,.tile .art{pointer-events:none;-webkit-user-drag:none;-webkit-touch-callout:none}#shelf.sorting{overflow:hidden!important;touch-action:none}
 .dragging{position:relative;z-index:5;box-shadow:0 14px 34px #0007!important;opacity:.95;transition:none!important}.sorting>*:not(.dragging){transition:transform .18s ease}
 .sorting{user-select:none;-webkit-user-select:none}.grip{cursor:grab;opacity:.55;font-size:18px;padding:0 6px;user-select:none}
 .ubtn{min-width:56px;padding:8px 12px;border-radius:999px;border:0;background:#173C32;color:#F3EBDD;font:inherit;font-weight:800;font-size:14px;cursor:pointer}
@@ -367,7 +367,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.7.8</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.7.9</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -564,7 +564,7 @@ function renderHome(){
   const R=S.meta.restaurants;$('#homeUser').textContent=S.meta.settings.user||'Juan Beltran';
   if(selIdx>=R.length)selIdx=Math.max(0,R.length-1);
   const sh=$('#shelf');
-  sh.innerHTML=R.length?R.map((r,i)=>`<button class="tile ${i===selIdx?'sel':''}" data-i="${i}" aria-label="${esc(r.name)}"><span class="art" style="background:${tone(r)}">${r.logo?`<img src="${r.logo}" alt="">`:`<span class="mono" style="font-size:${r.name.length>14?28:r.name.length>8?38:54}px">${esc(r.name)}</span>`}</span></button>`).join(''):`<div class="emptyhome">Toca “Tarjeta nueva” abajo para agregar tu primer restaurante</div>`;
+  sh.innerHTML=R.length?R.map((r,i)=>`<button class="tile ${i===selIdx?'sel':''}" data-i="${i}" aria-label="${esc(r.name)}"><span class="art" style="background:${tone(r)}">${r.logo?`<img src="${r.logo}" alt="" draggable="false">`:`<span class="mono" style="font-size:${r.name.length>14?28:r.name.length>8?38:54}px">${esc(r.name)}</span>`}</span></button>`).join(''):`<div class="emptyhome">Toca “Tarjeta nueva” abajo para agregar tu primer restaurante</div>`;
   sh.querySelectorAll('.tile').forEach(t=>t.onclick=()=>{const i=+t.dataset.i;if(i===selIdx){blip(990);openRest(R[i].id)}else{select(i,true)}});
   if(!sh._sortable){sh._sortable=1;dragSort(sh,'.tile','x',(i,t)=>{const L=S.meta.restaurants;moveIdx(L,i,t);selIdx=t;saveMeta();renderHome();toast('Tarjetas reordenadas')})}
   paintTitle();renderDock();
@@ -675,9 +675,9 @@ function dragSort(box,sel,axis,onEnd){if(!box)return;let st=null,timer=null;
     st.items.forEach((x,j)=>{if(j===st.i)return;let off=0;if(st.i<t&&j>st.i&&j<=t)off=-st.size;if(t<st.i&&j>=t&&j<st.i)off=st.size;x.style.transform=off?(axis==='x'?`translateX(${off}px)`:`translateY(${off}px)`):''})};
   const loop=()=>{if(!st)return;const sp=st.sp,R=sp===document.scrollingElement?{top:0,left:0,bottom:innerHeight,right:innerWidth}:sp.getBoundingClientRect();const v=axis==='x'?st.cur.x:st.cur.y,a=axis==='x'?R.left:R.top,b=axis==='x'?R.right:R.bottom;
     const sp2=v<a+60?-(a+60-v)/4:v>b-60?(v-(b-60))/4:0;if(sp2){axis==='x'?sp.scrollLeft+=sp2:sp.scrollTop+=sp2;layout()}requestAnimationFrame(loop)};
-  const end=()=>{clearTimeout(timer);timer=null;if(!st)return;const {i,t,items,it}=st;st=null;items.forEach(x=>x.style.transform='');it.classList.remove('dragging');box.classList.remove('sorting');if(box.id==='shelf')box.style.scrollSnapType='';
+  const end=e=>{clearTimeout(timer);timer=null;if(!st)return;try{const t0=e&&e.changedTouches&&e.changedTouches[0];if(t0){st.cur={x:t0.clientX,y:t0.clientY};layout()}}catch(x){}const {i,t,items,it}=st;st=null;items.forEach(x=>x.style.transform='');it.classList.remove('dragging');box.classList.remove('sorting');if(box.id==='shelf')box.style.scrollSnapType='';
     box._noclick=Date.now();if(t!==i){blip(1000,.04);onEnd(i,t)}};
-  box.addEventListener('touchstart',start,{passive:true});box.addEventListener('touchmove',move,{passive:false});box.addEventListener('touchend',end);box.addEventListener('touchcancel',end);
+  box.addEventListener('touchstart',start,{passive:true});box.addEventListener('touchmove',move,{passive:false});box.addEventListener('touchend',end);box.addEventListener('touchcancel',end);box.addEventListener('dragstart',e=>{if(e.target.closest(sel))e.preventDefault()});
   box.addEventListener('mousedown',start);addEventListener('mousemove',e=>{if(st||timer)move(e)});addEventListener('mouseup',end);
   box.addEventListener('click',e=>{if(box._noclick&&Date.now()-box._noclick<400){e.stopPropagation();e.preventDefault()}},true);
   box.addEventListener('contextmenu',e=>{if(e.target.closest(sel))e.preventDefault()})}
