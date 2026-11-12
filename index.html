@@ -362,7 +362,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.7.1</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.7.2</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -515,7 +515,7 @@ function flushSaves(){for(const k in pending){clearTimeout(timers[k]);pending[k]
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSaves()});window.addEventListener('pagehide',flushSaves);
 async function delDoc(k){try{localStorage.removeItem('jbapp_'+k)}catch(e){}if(db){try{await db.doc('app/'+k).delete()}catch(e){}}}
 const saveMeta=()=>save('meta',S.meta);
-const saveR=id=>save('r_'+id,S.r[id]);
+const saveR=(id,now)=>{const p=save('r_'+id,S.r[id],now);if(id===socRid())socialSoon();return p};
 function fixR(d){
   const R=Object.assign({ingredients:[],recipes:[],categories:[],compras:[],sales:[],ledger:[],settings:{error:S.meta.settings.error,target:S.meta.settings.target}},d||{});
   if(R.settings.opex==null)R.settings.opex=0;
@@ -1481,6 +1481,47 @@ async function migrateMiradorData(){
   if(sugar&&(!rec.items||!rec.items.length)){rec.items=[{ing:berries.id,qty:125},{ing:straw.id,qty:480},{ing:sugar.id,qty:90}];rec.cat=cat.id;rec.portions=1;changed=true}
   if(changed)await saveR(card.id,true);
 }
+/* ---------- puente con SOCIAL APP (app del capitán de compras de Social) ----------
+   Lo pendiente en Shopin para Social le aparece al capitán en CARGA como una solicitud "Juan Beltran · Shopin".
+   Lo que el capitán marca como comprado se marca solo en Shopin. Usa ids con prefijo "jb-" para no chocar
+   con otras apps (la de Jeanca usa "jk-"). */
+const SOCIAL_APP='https://script.google.com/macros/s/AKfycbzvw8TvV-YjhiMt2n1akTVIOjz1z7Cdz-QzY8gDkEnF-IRFs9AOmyVAtGVVl3Wyey2c/exec';
+function socRid(){const r=(S.meta.restaurants||[]).find(r=>r.id==='social')||(S.meta.restaurants||[]).find(r=>/social/i.test(r.name||''));return r?r.id:null}
+let socT=null,socBusy=false,socAgain=false;
+function socialSoon(){clearTimeout(socT);socT=setTimeout(socialSync,1500)}
+const socQty=x=>String(x.qty||1)+(x.note?' · '+x.note:'');
+async function socialSync(){
+  const rid=socRid();if(!rid||!S.r[rid])return;if(socBusy){socAgain=true;return}socBusy=true;
+  try{
+    const st=await (await fetch(SOCIAL_APP,{cache:'no-store'})).json();
+    const R=S.r[rid];R.compras=R.compras||[];
+    const mine=(st.reqs||[]).filter(r=>String(r.id).startsWith('jb-'));
+    // 1) lo que el capitán compró se marca en Shopin (una sola vez por producto)
+    let seen=[];try{seen=JSON.parse(localStorage.getItem('jb_soc_seen')||'[]')}catch(e){}
+    const seenS=new Set(seen);let mark=false;
+    mine.forEach(r=>(r.items||[]).forEach(it=>{if(it.status==='bought'&&!seenS.has(it.id)){seenS.add(it.id);const x=R.compras.find(c=>'jb-'+c.id===it.id);if(x&&!x.done){x.done=true;mark=true}}}));
+    try{localStorage.setItem('jb_soc_seen',JSON.stringify([...seenS].slice(-500)))}catch(e){}
+    if(mark){save('r_'+rid,R);try{if(!$('#shop').hidden)renderShop()}catch(e){}toast('El capitán compró cosas de tu Shopin')}
+    // 2) lo pendiente de Shopin va a la carga abierta del capitán
+    let open=mine.find(r=>!r.sent);const cur=open?open.items||[]:[];const items=[];
+    cur.forEach(it=>{const x=R.compras.find(c=>'jb-'+c.id===it.id);
+      if(it.status!=='pending')items.push(it);               // ya lo marcó el capitán: se respeta
+      else if(x&&!x.done)items.push({...it,name:x.name,qty:socQty(x)}); // sigue pendiente (con cambios)
+    });
+    R.compras.filter(x=>!x.done&&!items.some(it=>it.id==='jb-'+x.id)).forEach(x=>items.push({id:'jb-'+x.id,zone:'Shopin',name:x.name,qty:socQty(x),status:'pending'}));
+    if(open&&JSON.stringify(cur)===JSON.stringify(items))return;
+    if(!open&&!items.length)return;
+    const body={del:{},reqs:[]};
+    if(open&&!items.length)body.del[open.id]=Date.now();
+    else{if(!open)open={id:'jb-'+Date.now().toString(36),from:(S.meta.settings.user||'Juan Beltran')+' · Shopin',date:new Date().toISOString(),sent:false,note:'',memo:'Enviado desde la app de Juan Beltran'};
+      body.reqs.push({...open,items,u:Date.now()})}
+    await fetch(SOCIAL_APP,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({state:body})});
+  }catch(e){console.warn('social',e)}
+  finally{socBusy=false;if(socAgain){socAgain=false;socialSoon()}}
+}
+setTimeout(socialSync,5000);
+setInterval(()=>{if(document.visibilityState==='visible')socialSync()},30000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')socialSync()});
 async function boot(){
   const t0=Date.now();bar(12);
   try{db=window.claude?await withTimeout(window.claude.use('db'),5000):null}catch(e){console.warn('db',e);db=null}
