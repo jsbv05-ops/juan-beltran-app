@@ -259,6 +259,10 @@ td .in{padding:6px 8px;border-radius:8px}
 .stepper b{min-width:34px;text-align:center}
 .eline{background:var(--panel);border-radius:14px;box-shadow:var(--shadow);padding:12px;display:flex;flex-direction:column;gap:8px}
 .egrid{display:grid;grid-template-columns:1.2fr .8fr 1.2fr;gap:8px}
+.ubtn{min-width:56px;padding:8px 12px;border-radius:999px;border:0;background:#173C32;color:#F3EBDD;font:inherit;font-weight:800;font-size:14px;cursor:pointer}
+.ubtn::after{content:" ▾";opacity:.7;font-size:11px}
+.packw{display:inline-flex;align-items:center;gap:6px}.usfx{font-weight:800;font-size:13px;color:#B8913A;min-width:22px}
+.add-new{background:color-mix(in srgb,#B8913A 16%,transparent)!important}
 .paylist{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;padding:2px}
 .payit{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--panel);border:2px solid transparent;border-radius:12px;padding:9px 12px;box-shadow:var(--shadow);color:inherit;font:inherit;cursor:pointer}
 .payit .ck{width:22px;height:22px;border-radius:7px;border:2px solid #B8913A;flex:none;display:grid;place-items:center}
@@ -357,7 +361,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.6.9</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.6.10</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -657,7 +661,7 @@ function mpView(R){
   <div class="tabs" style="padding-top:0">${F.map(([k,l,n])=>`<button class="tab" data-mpf="${k}" aria-selected="${mpF===k}">${l} · ${n}</button>`).join('')}</div>
   <span class="muted small" id="mpCount"></span>
   <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Unidad</th><th>Presentación</th><th>Precio compra</th><th>Rendimiento %</th><th>Costo/unidad</th><th>En recetas</th><th></th></tr></thead><tbody>
-  ${L.map(i=>{const uses=usesOf(i);return `<tr data-ing="${i.id}" data-uses="${uses}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><select class="in" data-f="unit">${UNITS.map(u=>`<option ${u===i.unit?'selected':''}>${u}</option>`).join('')}</select></td><td><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price||''}" placeholder="⚠ sin precio" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
+  ${L.map(i=>{const uses=usesOf(i);return `<tr data-ing="${i.id}" data-uses="${uses}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><button type="button" class="ubtn" data-unitpk>${esc(i.unit||'—')}</button></td><td><span class="packw"><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"><span class="usfx" data-usfx>${esc(i.unit||'')}</span></span></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price||''}" placeholder="⚠ sin precio" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
   </tbody></table></div>${R.ingredients.length?'':'<div class="empty">Agrega tu primer ingrediente con su presentación y precio de compra.</div>'}</div>`;
 }
 function mpFilter(R){
@@ -696,7 +700,8 @@ function bindRest(R){
   act('newRecipe',()=>{const r={id:uid(),name:'Nueva receta',cat:curCat!=='all'&&curCat!=='none'?curCat:(R.categories[0]?.id||null),portions:1,price:0,error:null,target:null,items:[]};R.recipes.push(r);saveR(curR.id);openRecipe(r.id)});
   act('addIng',()=>{const id=uid();R.ingredients.push({id,name:'',unit:'g',pack:1000,price:0,yield:100});mpF='all';mpQ='';saveR(curR.id);renderRest();setTimeout(()=>{const el=$(`#rBody tr[data-ing="${id}"] [data-f="name"]`);if(el){el.scrollIntoView({block:'center'});el.focus()}},60)});
   if($('#mpQ')){mpFilter(R);$('#mpQ').oninput=e=>{mpQ=e.target.value;mpFilter(R)};B.querySelectorAll('[data-mpf]').forEach(b=>b.onclick=()=>{mpF=b.dataset.mpf;B.querySelectorAll('[data-mpf]').forEach(x=>x.setAttribute('aria-selected',x===b));mpFilter(R)})}
-  B.querySelectorAll('tr[data-ing]').forEach(tr=>{const ing=R.ingredients.find(i=>i.id===tr.dataset.ing);tr.querySelectorAll('[data-f]').forEach(inp=>{const upd=()=>{const f=inp.dataset.f;ing[f]=f==='price'?pm(inp.value):['pack','yield'].includes(f)?nd(inp.value):inp.value;saveR(curR.id);const uc=tr.querySelector('[data-uc]');if(uc)uc.innerHTML=`<b>${money(unitCost(ing))}</b>/${esc(ing.unit)}`};if(inp.tagName==='SELECT')inp.onchange=upd;else{inp.oninput=upd;inp.onchange=upd}})});
+  B.querySelectorAll('tr[data-ing]').forEach(tr=>{const ing=R.ingredients.find(i=>i.id===tr.dataset.ing);tr.querySelectorAll('[data-f]').forEach(inp=>{const upd=()=>{const f=inp.dataset.f;ing[f]=f==='price'?pm(inp.value):['pack','yield'].includes(f)?nd(inp.value):inp.value;saveR(curR.id);const uc=tr.querySelector('[data-uc]');if(uc)uc.innerHTML=`<b>${money(unitCost(ing))}</b>/${esc(ing.unit)}`};if(inp.tagName==='SELECT')inp.onchange=upd;else{inp.oninput=upd;inp.onchange=upd}});
+    const ub=tr.querySelector('[data-unitpk]');if(ub)ub.onclick=()=>pickSheet(`Unidad de ${ing.name||'la materia prima'}`,UNITS,ing.unit,u=>{ing.unit=u;saveR(curR.id);ub.textContent=u;const sf=tr.querySelector('[data-usfx]');if(sf)sf.textContent=u;const uc=tr.querySelector('[data-uc]');if(uc)uc.innerHTML=`<b>${money(unitCost(ing))}</b>/${esc(u)}`;blip(900,.02)})});
   B.querySelectorAll('[data-del-ing]').forEach(b=>b.onclick=()=>{const id=b.dataset.delIng;const used=R.recipes.filter(r=>r.items.some(x=>x.ing===id));if(used.length&&b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';toast(`Está en ${used.length} receta(s). Toca otra vez para eliminar.`);return}R.ingredients=R.ingredients.filter(i=>i.id!==id);R.recipes.forEach(r=>r.items=r.items.filter(x=>x.ing!==id));saveR(curR.id);renderRest()});
   act('saveDefaults',()=>{R.settings.error=nd($('#gErr').value);R.settings.target=nd($('#gTar').value);R.settings.opex=nd($('#gOpx').value);saveR(curR.id);toast('Valores guardados')});
   act('applyAll',()=>{const sc=$('#gScope').value,e=$('#gAllErr').value,t=$('#gAllTar').value,ox=$('#gAllOpx').value,p=$('#gPrice').value,m=$('#gMp').value,sg=$('#gSuggest').checked;
@@ -764,7 +769,9 @@ function renderRecipe(){
   bind('#fName','name');bind('#fCat','cat');bind('#fPor','portions','n');bind('#fErr','error','n',true);if(!isSubrecipe){bind('#fPrice','price','money');bind('#fTar','target','n',true);bind('#fOpx','opex','n',true);$('#useSug').onclick=()=>{r.price=Math.ceil(c.suggested/100)*100;sv();renderRecipe()}}
   const addResults=$('#addResults'),addSearch=$('#addSearch');
   const paintsAddResults=()=>{const q=norm(addSearch.value),mp=R.ingredients.filter(i=>!q||norm(i.name).includes(q)).slice(0,80),subs=R.recipes.filter(x=>norm(catName(R,x.cat))==='subrecetas'&&x.id!==r.id&&!recipeDependsOn(x.id,r.id,R)&&(!q||norm(x.name).includes(q))).slice(0,80);
-    addResults.innerHTML=[...mp.map(i=>`<button type="button" data-add-type="ingredient" data-add-id="${i.id}"><span>${esc(i.name||'(sin nombre)')}<small>Materia prima · ${esc(uShow(i))}${nd(i.price)>0?` · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}`:' · sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`),...subs.map(x=>`<button type="button" data-add-type="recipe" data-add-id="${x.id}"><span>${esc(x.name)}<small>Subreceta · ${money(recipeCostPerPortion(x,R))}/porción</small></span><b class="add-action">+ Añadir</b></button>`)].join('')||'<div class="muted small" style="padding:10px">No hay coincidencias.</div>';addResults.hidden=false;
+    const raw=addSearch.value.trim(),exact=raw&&R.ingredients.some(i=>norm(i.name)===norm(raw));
+    addResults.innerHTML=(raw&&!exact?`<button type="button" data-add-new="1" class="add-new"><span>Crear “${esc(raw)}”<small>Nueva materia prima · se guarda en la MP y se añade a esta receta</small></span><b class="add-action">+ Crear</b></button>`:'')+[...mp.map(i=>`<button type="button" data-add-type="ingredient" data-add-id="${i.id}"><span>${esc(i.name||'(sin nombre)')}<small>Materia prima · ${esc(uShow(i))}${nd(i.price)>0?` · ${money(ucShow(i,unitCost(i)))}/${uShow(i)}`:' · sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`),...subs.map(x=>`<button type="button" data-add-type="recipe" data-add-id="${x.id}"><span>${esc(x.name)}<small>Subreceta · ${money(recipeCostPerPortion(x,R))}/porción</small></span><b class="add-action">+ Añadir</b></button>`)].join('')||'<div class="muted small" style="padding:10px">No hay coincidencias.</div>';addResults.hidden=false;
+    const nb=addResults.querySelector('[data-add-new]');if(nb)nb.onclick=()=>{addResults.hidden=true;newIngSheet(raw,ing=>{r.items.push({ing:ing.id,qty:0,type:'ingredient'});sv();addSearch.value='';renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},60)})};
     addResults.querySelectorAll('[data-add-id]').forEach(b=>b.onclick=()=>{const type=b.dataset.addType,id=b.dataset.addId;if(type==='recipe'&&recipeDependsOn(id,r.id,R))return toast('Esa subreceta depende de esta receta y crearía un ciclo');r.items.push({ing:id,qty:0,type});sv();addSearch.value='';addResults.hidden=true;renderRecipe();setTimeout(()=>{const q=$$('[data-q]');q[q.length-1]?.focus()},30)});
   };
   addSearch.onfocus=paintsAddResults;addSearch.oninput=paintsAddResults;addSearch.onkeydown=e=>{if(e.key==='Escape')addResults.hidden=true};addSearch.onblur=()=>setTimeout(()=>{if(!addResults.contains(document.activeElement))addResults.hidden=true},120);
@@ -782,7 +789,70 @@ async function saveXlsx(wb,fname){
   try{await dl.save({filename:fname,data:new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})});toast('Excel listo')}catch(e){toast(e.code==='declined'?'Descarga cancelada':'No se pudo descargar ('+(e.code||'error')+')')}
 }
 const sheetName=(wb,s)=>{let nm=(s||'Hoja').replace(/[\\\/\?\*\[\]:]/g,'').slice(0,28)||'Hoja';let k=2;while(wb.SheetNames.includes(nm))nm=nm.slice(0,25)+' '+k++;return nm};
-function exportRecipes(R,ids){
+let _xj=null;const loadExcelJS=()=>window.ExcelJS?Promise.resolve(window.ExcelJS):(_xj=_xj||new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';sc.onload=()=>res(window.ExcelJS);sc.onerror=()=>{_xj=null;rej(new Error('load'))};document.head.appendChild(sc)}));
+const hex6=c=>{c=String(c||'').trim();if(/^#[0-9a-f]{3}$/i.test(c))c='#'+c.slice(1).split('').map(x=>x+x).join('');return /^#[0-9a-f]{6}$/i.test(c)?c.slice(1).toUpperCase():'173C32'};
+const tint=(h,t)=>[0,2,4].map(i=>Math.round(parseInt(h.substr(i,2),16)+(255-parseInt(h.substr(i,2),16))*t).toString(16).padStart(2,'0')).join('').toUpperCase();
+const lum=h=>{const [r,g,b]=[0,2,4].map(i=>parseInt(h.substr(i,2),16)/255);return .299*r+.587*g+.114*b};
+async function exportRecipes(R,ids){let EX;try{EX=await loadExcelJS()}catch(e){return exportRecipesBasic(R,ids)}
+  try{await exportRecipesStyled(R,ids,EX)}catch(e){console.error(e);exportRecipesBasic(R,ids)}}
+async function exportRecipesStyled(R,ids,EX){
+  const rest=curR,recs=R.recipes.filter(r=>ids.includes(r.id));const wb=new EX.Workbook();wb.creator='Juan Beltran';
+  let dark=hex6(tone(rest));if(lum(dark)>.85)dark='173C32';const light=tint(dark,.55),fd=lum(dark)<.6?'FFFFFFFF':'FF111111';
+  const MONEY='"$"#,##0',MONEY2='"$"#,##0.00',PCT='0%',PCT1='0.0%';
+  const thin={style:'thin',color:{argb:'FF9A9A9A'}},box={top:thin,left:thin,bottom:thin,right:thin};
+  const paint=(c,fill,bold=true,size=10,color)=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+fill}};c.font={bold,size,name:'Calibri',color:{argb:color||(fill===dark?fd:'FF111111')}};c.alignment={vertical:'middle',horizontal:'center',wrapText:true};c.border=box};
+  const usedNames=new Set();const sname=n=>{let b=(n||'Hoja').replace(/[\\\/\?\*\[\]:]/g,'').slice(0,28)||'Hoja',k=2,x=b;while(usedNames.has(x.toLowerCase()))x=b.slice(0,25)+' '+k++;usedNames.add(x.toLowerCase());return x};
+  // ---- MP
+  const used=new Set();recs.forEach(r=>calc(r,R).lines.forEach(l=>{if(!l.subrecipe&&l.ing)used.add(l.ing.id)}));
+  const mpIngs=R.ingredients.filter(i=>used.has(i.id)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const C=wb.addWorksheet(sname('CARTA'),{views:[{state:'frozen',ySplit:2}]});
+  const M=wb.addWorksheet(sname('MP'),{views:[{state:'frozen',ySplit:2}]});usedNames.add('mp');
+  M.columns=[{width:34},{width:12},{width:15},{width:16},{width:15},{width:16}];
+  M.mergeCells('A1:F1');M.getCell('A1').value=`MATERIA PRIMA · ${rest.name.toUpperCase()}`;paint(M.getCell('A1'),dark,true,12);M.getRow(1).height=24;
+  ['INGREDIENTE','UND DE MEDIDA','PRESENTACIÓN','PRECIO COMPRA','RENDIMIENTO %','COSTO UNIT'].forEach((h,i)=>paint(M.getRow(2).getCell(i+1),light));M.getRow(2).values=['INGREDIENTE','UND DE MEDIDA','PRESENTACIÓN','PRECIO COMPRA','RENDIMIENTO %','COSTO UNIT'];M.getRow(2).height=28;
+  const mpRow={};mpIngs.forEach((i,k)=>{const n=k+3;mpRow[i.id]=n;const row=M.getRow(n);row.values=[i.name,i.unit,nd(i.pack),nd(i.price)||null,nd(i.yield??100)/100,{formula:`IF(C${n}*E${n}>0,D${n}/(C${n}*E${n}),0)`,result:unitCost(i)}];
+    row.eachCell({includeEmpty:true},(c,ci)=>{if(ci>6)return;c.border=box;c.font={size:10,name:'Calibri'};c.alignment={vertical:'middle',horizontal:ci===1?'left':'center'}});
+    row.getCell(4).numFmt=MONEY;row.getCell(5).numFmt=PCT;row.getCell(6).numFmt=MONEY2;if(!(nd(i.price)>0)){row.getCell(4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFDE2E2'}};row.getCell(4).note='Sin precio'}});
+  // ---- recetas (formato de costeo estándar)
+  const sum=[];
+  recs.forEach((r,ri)=>{const c=calc(r,R),sub=isSubrecipeRecipe(R,r);const W=wb.addWorksheet(sname(r.name));W.columns=[{width:36},{width:14},{width:11},{width:16},{width:16},{width:16}];
+    W.mergeCells('A1:F1');W.getCell('A1').value='FORMATO DE COSTEO DE RECETA ESTANDAR';paint(W.getCell('A1'),dark,true,12);W.getRow(1).height=24;
+    W.getCell('A2').value='NOMBRE DE LA PREPARACIÓN:';paint(W.getCell('A2'),light);W.mergeCells('B2:D2');W.getCell('B2').value=r.name;W.getCell('B2').font={bold:true,size:11};W.getCell('B2').alignment={vertical:'middle'};
+    W.mergeCells('E2:E3');W.getCell('E2').value='PREPARACION No.';paint(W.getCell('E2'),light,true,9);W.mergeCells('F2:F3');W.getCell('F2').value=ri+1;W.getCell('F2').alignment={horizontal:'center',vertical:'middle'};W.getCell('F2').font={bold:true,size:12};
+    W.getCell('A3').value='N° PORCIONES:';paint(W.getCell('A3'),light);W.mergeCells('B3:D3');W.getCell('B3').value=c.portions;W.getCell('B3').alignment={horizontal:'left'};W.getCell('B3').font={bold:true};
+    ['B2','B3','F2'].forEach(a=>W.getCell(a).border=box);
+    W.mergeCells('A4:A5');W.mergeCells('B4:B5');W.mergeCells('C4:C5');W.mergeCells('D4:E4');W.mergeCells('F4:F5');
+    [['A4','INGREDIENTE'],['B4','UND DE MEDIDA'],['C4','CANT'],['D4','COSTOS'],['F4','% PARTICIPACIÓN DEL COSTO'],['D5','COSTO UNIT'],['E5','COSTO TOTAL']].forEach(([a,v])=>{W.getCell(a).value=v;paint(W.getCell(a),light,true,a==='F4'?8:10)});['B5','C5','F5','A5'].forEach(a=>W.getCell(a).border=box);
+    const first=6;let n=first;const T=first+c.lines.length;
+    c.lines.forEach(l=>{const row=W.getRow(n),ing=l.ing,isSub=l.subrecipe;const unit=isSub?'porción':(ing?.unit||'');
+      const uc=isSub?{value:+l.uc.toFixed(2)}:(mpRow[ing?.id]?{formula:`MP!F${mpRow[ing.id]}`,result:l.uc}:l.uc);
+      row.values=[(ing?.name||'Ingrediente eliminado')+(isSub?' (subreceta)':''),unit,nd(l.it.qty),isSub?+l.uc.toFixed(2):uc,{formula:`D${n}*C${n}`,result:l.cost},{formula:`IF($B$${T}>0,E${n}/$B$${T},0)`,result:l.share}];
+      row.eachCell({includeEmpty:true},(cl,ci)=>{if(ci>6)return;cl.border=box;cl.font={size:10,name:'Calibri'};cl.alignment={vertical:'middle',horizontal:ci===1?'left':'center'}});
+      row.getCell(4).numFmt=MONEY2;row.getCell(5).numFmt=MONEY;row.getCell(6).numFmt=PCT;if(!isSub&&!(nd(ing?.price)>0))row.getCell(4).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFDE2E2'}};n++});
+    // subtotal
+    W.getCell(`A${T}`).value='COSTO SUBTOTAL';paint(W.getCell(`A${T}`),dark);W.getCell(`A${T}`).alignment={horizontal:'left',vertical:'middle'};W.mergeCells(`B${T}:F${T}`);W.getCell(`B${T}`).value=c.lines.length?{formula:`SUM(E${first}:E${T-1})`,result:c.base}:0;paint(W.getCell(`B${T}`),dark,true,11);W.getCell(`B${T}`).numFmt=MONEY;
+    const rowsL=[['MARGEN DE SEGURIDAD',{c:{v:c.err,f:PCT}},{formula:`B${T}*C${T+1}`,result:c.base*c.err},MONEY],['COSTO TOTAL',null,{formula:`B${T}+F${T+1}`,result:c.total},MONEY],['COSTO UNITARIO PORCION',null,{formula:`F${T+2}/B3`,result:c.perPortion},MONEY,true]];
+    if(!sub)rowsL.push(['PRECIO DE VENTA CARTA',null,c.price||0,MONEY,false,true],['APORTE A GASTOS OPERATIVOS',{c:{v:c.opex,f:PCT}},{formula:`F${T+4}*C${T+5}`,result:c.opexAmt},MONEY],['GANANCIA POR PORCIÓN',null,{formula:`F${T+4}-F${T+3}-F${T+5}`,result:c.net},MONEY],['GANANCIA %',null,{formula:`IF(F${T+4}>0,F${T+6}/F${T+4},0)`,result:c.margin},PCT1,true],['% COSTO REAL (FOOD COST)',null,{formula:`IF(F${T+4}>0,F${T+3}/F${T+4},0)`,result:c.foodCost},PCT1],['PRECIO SUGERIDO',{c:{v:c.target,f:PCT,lab:'meta'}},{formula:`IF(1-C${T+9}-C${T+5}>0,F${T+3}/(1-C${T+9}-C${T+5}),0)`,result:c.suggested},MONEY]);
+    rowsL.forEach(([lab,cc,val,fmt,hl,inp],k)=>{const rn=T+1+k,row=W.getRow(rn);W.mergeCells(`A${rn}:B${rn}`);row.getCell(1).value=lab;row.getCell(1).font={bold:true,size:10};row.getCell(1).alignment={vertical:'middle'};
+      if(cc){row.getCell(3).value=cc.c.v;row.getCell(3).numFmt=cc.c.f;row.getCell(3).font={bold:true,size:10};row.getCell(3).alignment={horizontal:'center'};row.getCell(3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF6D6'}}}
+      W.mergeCells(`D${rn}:E${rn}`);row.getCell(6).value=val;row.getCell(6).numFmt=fmt;row.getCell(6).alignment={horizontal:'center',vertical:'middle'};row.getCell(6).font={bold:!!hl,size:hl?12:10};
+      if(hl)paint(row.getCell(6),dark,true,12);if(inp)row.getCell(6).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+tint(dark,.75)}};
+      for(let ci=1;ci<=6;ci++)row.getCell(ci).border=box});
+    if(c.missing.length){const rn=T+rowsL.length+2;W.mergeCells(`A${rn}:F${rn}`);W.getCell(`A${rn}`).value='⚠ Falta precio de: '+[...new Set(c.missing)].join(', ');W.getCell(`A${rn}`).font={bold:true,color:{argb:'FFC0392B'},size:10}}
+    W.pageSetup={orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
+    sum.push({r,c,sub,sheet:W.name})});
+  // ---- resumen (como la CARTA)
+  C.columns=[{width:34},{width:20},{width:16},{width:16},{width:14},{width:16},{width:14}];
+  C.mergeCells('A1:G1');C.getCell('A1').value=`CARTA · ${rest.name.toUpperCase()}`;paint(C.getCell('A1'),dark,true,12);C.getRow(1).height=24;
+  C.getRow(2).values=['RECETA','CATEGORÍA','COSTO PORCIÓN','PRECIO VENTA','FOOD COST','GANANCIA/PORCIÓN','GANANCIA %'];for(let i=1;i<=7;i++)paint(C.getRow(2).getCell(i),light);C.getRow(2).height=28;
+  sum.forEach(({r,c,sub},k)=>{const row=C.getRow(k+3);row.values=[r.name,catName(R,r.cat)||'',Math.round(c.perPortion),sub?null:c.price,sub?null:c.foodCost,sub?null:Math.round(c.net),sub?null:c.margin];
+    row.eachCell({includeEmpty:true},(cl,ci)=>{if(ci>7)return;cl.border=box;cl.font={size:10};cl.alignment={vertical:'middle',horizontal:ci<=2?'left':'center'}});[3,4,6].forEach(i=>row.getCell(i).numFmt=MONEY);[5,7].forEach(i=>row.getCell(i).numFmt=PCT1)});
+  // orden: CARTA, MP, recetas
+  const buf=await wb.xlsx.writeBuffer();const fname=`${rest.name} - recetas ${today()}.xlsx`.replace(/[\\\/:*?"<>|]/g,'');
+  const dl=await getDL();if(!dl)return toast('Las descargas no están disponibles aquí');
+  try{await dl.save({filename:fname,data:new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})});toast('Excel listo')}catch(e){toast(e.code==='declined'?'Descarga cancelada':'No se pudo descargar ('+(e.code||'error')+')')}
+}
+function exportRecipesBasic(R,ids){
   if(!window.XLSX)return toast('No cargó el generador de Excel');const wb=XLSX.utils.book_new();const recs=R.recipes.filter(r=>ids.includes(r.id));
   const sum=[['Receta','Categoría','Porciones','Costo ingredientes','Margen de error %','Costo total','Costo por porción','Precio de venta','Food cost %','Aporte gastos operativos %','Aporte gastos operativos $','Ganancia por porción','Margen de ganancia %','Precio sugerido','Precios faltantes']];
   recs.forEach(r=>{const c=calc(r,R),sub=isSubrecipeRecipe(R,r);sum.push([r.name,catName(R,r.cat),c.portions,Math.round(c.base),c.err*100,Math.round(c.total),Math.round(c.perPortion),sub?'':c.price,sub?'':+(c.foodCost*100).toFixed(1),sub?'':+(c.opex*100).toFixed(1),sub?'':Math.round(c.opexAmt),sub?'':Math.round(c.net),sub?'':+(c.margin*100).toFixed(1),sub?'':Math.round(c.suggested),[...new Set(c.missing)].join(', ')])});
@@ -1069,6 +1139,17 @@ $('#evExport').onclick=()=>{const ev=curEv;if(!ev||!window.XLSX)return;const c=e
   if(ev.type==='colab'&&ev.partners?.length){rows.push([],['Socio','% utilidad','Aportó','Le corresponde']);ev.partners.forEach(p=>rows.push([p.name,nd(p.pct),nd(p.put),Math.round(c.profit*nd(p.pct)/100+nd(p.put))]))}
   const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:30},{wch:14},{wch:10},{wch:14},{wch:14}];XLSX.utils.book_append_sheet(wb,ws,'Evento');saveXlsx(wb,`Evento ${ev.name} ${ev.date||today()}.xlsx`)};
 
+function newIngSheet(name,cb){const R=S.r[curR.id];let unit='g';const P=$('#genPane');
+  P.innerHTML=`<h2>Nueva materia prima</h2><div class="field"><label for="niName">Nombre</label><input class="in" id="niName" value="${esc(name)}"></div>
+   <div class="field"><span class="lab">Unidad de medida</span><div class="seg segwrap">${UNITS.map(u=>`<button type="button" data-niu="${u}" aria-pressed="${u===unit}">${u}</button>`).join('')}</div></div>
+   <div class="grid2"><div class="field"><label for="niPack">Presentación (<span data-niul>g</span>)</label><input class="in num" id="niPack" inputmode="decimal" placeholder="Ej: 1000"></div><div class="field"><label for="niPrice">Precio de compra</label><input class="in num" id="niPrice" inputmode="numeric" placeholder="Opcional"></div></div>
+   <small class="muted">Si no sabes el precio, déjalo vacío: queda marcado “sin precio” en la MP.</small>
+   <button class="btn" id="niOk" style="background:#173C32;color:#F3EBDD">Guardar y añadir a la receta</button><button class="btn ghost" id="niX">Cancelar</button>`;
+  P.querySelectorAll('[data-niu]').forEach(b=>b.onclick=()=>{unit=b.dataset.niu;P.querySelectorAll('[data-niu]').forEach(x=>x.setAttribute('aria-pressed',x===b));P.querySelector('[data-niul]').textContent=unit});
+  $('#niX').onclick=()=>$('#genSheet').hidden=true;
+  $('#niOk').onclick=()=>{const nm=$('#niName').value.trim();if(!nm)return toast('Escribe el nombre');const dup=R.ingredients.find(i=>norm(i.name)===norm(nm));if(dup){$('#genSheet').hidden=true;return cb(dup)}
+    const ing={id:uid(),name:nm,unit,pack:nd($('#niPack').value)||({g:1000,ml:1000,und:1,kg:1,L:1,oz:1}[unit]||1),price:pm($('#niPrice').value)||0,yield:100};R.ingredients.push(ing);saveR(curR.id);$('#genSheet').hidden=true;toast('Añadida a la MP');blip(1000);cb(ing)};
+  $('#genSheet').hidden=false;setTimeout(()=>$('#niPack').focus(),60)}
 function pickSheet(title,opts,cur,cb){const P=$('#genPane');P.innerHTML=`<h2>${esc(title)}</h2><div class="stack" style="gap:8px">${opts.map(o=>`<button class="btn ${o===cur?'':'ghost'}" data-pk="${esc(o)}" style="justify-content:flex-start">${o===cur?'✓ ':''}${esc(o)}</button>`).join('')}</div>`;P.querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{$('#genSheet').hidden=true;cb(b.dataset.pk)});$('#genSheet').hidden=false}
 /* ---------- ventas: Pole / Podio / Rookie / Box ---------- */
 let saR=null,saPer=null,saCat='all';
