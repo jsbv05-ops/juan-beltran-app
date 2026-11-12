@@ -260,6 +260,8 @@ td .in{padding:6px 8px;border-radius:8px}
 .eline{background:var(--panel);border-radius:14px;box-shadow:var(--shadow);padding:12px;display:flex;flex-direction:column;gap:8px}
 .egrid{display:grid;grid-template-columns:1.2fr .8fr 1.2fr;gap:8px}
 .syncdot{width:14px;height:14px;border-radius:50%;background:#2ecc71;flex:none;box-shadow:0 0 0 4px color-mix(in srgb,#2ecc71 25%,transparent)}.syncdot[data-st="pend"]{background:#E2B53E}.syncdot[data-st="err"],.syncdot[data-st="off"]{background:#c0392b}
+.afx{position:relative;display:inline-flex;align-items:center;max-width:100%}.field>.afx,.grid2 .afx,.egrid .afx{display:flex;width:100%}.afx>input{width:100%;min-width:0}
+.afx>i{position:absolute;font-style:normal;font-weight:800;color:#B8913A;pointer-events:none;font-size:.95em}.afx-l>i{left:12px}.afx-l>input{padding-left:26px!important}.afx-r>i{right:12px}.afx-r>input{padding-right:30px!important}
 .ubtn{min-width:56px;padding:8px 12px;border-radius:999px;border:0;background:#173C32;color:#F3EBDD;font:inherit;font-weight:800;font-size:14px;cursor:pointer}
 .ubtn::after{content:" ▾";opacity:.7;font-size:11px}
 .packw{display:inline-flex;align-items:center;gap:6px}.usfx{font-weight:800;font-size:13px;color:#B8913A;min-width:22px}
@@ -362,18 +364,18 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.7.5</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.7.6</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
 <section id="rest" class="screen" hidden>
   <div class="hd gut"><button class="back" data-back aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><div class="logo" id="rLogo"></div><h1 id="rName"></h1><button class="btn sm ghost" id="rEdit">Editar</button></div>
   <div class="gut"><div class="tabs" role="tablist" id="rTabs">
-    <button class="tab" role="tab" data-tab="recipes">Recetas</button>
-    <button class="tab" role="tab" data-tab="mp">Materia prima</button>
-    <button class="tab" role="tab" data-tab="global">Ajustes globales</button>
-    <button class="tab" role="tab" data-tab="export">Exportar Excel</button>
     <button class="tab" role="tab" data-tab="colab" id="tabColab" hidden>💰 Cuentas</button>
+    <button class="tab" role="tab" data-tab="recipes">🍽 Recetas</button>
+    <button class="tab" role="tab" data-tab="mp">🧺 Materia prima</button>
+    <button class="tab" role="tab" data-tab="global">⚙️ Ajustes</button>
+    <button class="tab" role="tab" data-tab="export">📊 Excel</button>
   </div></div>
   <div class="body gut" id="rBody"></div>
 </section>
@@ -647,11 +649,48 @@ function recipesView(R){
   return `<div class="stack">
   <div class="kpis"><div class="kpi hl"><small>Recetas</small><b class="num">${R.recipes.length}</b></div>${isSubCategory?'':`<div class="kpi"><small>Margen promedio</small><b class="num">${pct(avgM)}</b></div>`}<div class="kpi"><small>Categorías</small><b class="num">${R.categories.length}</b></div><div class="kpi"><small>Materias primas</small><b class="num">${R.ingredients.length}</b></div></div>
   <div class="tabs" style="padding-top:0"><button class="tab" data-cat="all" aria-selected="${curCat==='all'}">Todas</button>${R.categories.map(c=>`<button class="tab" data-cat="${c.id}" aria-selected="${curCat===c.id}">${esc(c.name)}</button>`).join('')}<button class="tab" data-act="cats">✎ Categorías</button></div>
-  <div class="rowx"><input class="in" id="recQ" type="search" placeholder="🔍 Buscar receta…" value="${esc(recQ)}" style="flex:1;min-width:160px;border-radius:999px"><button class="btn ghost" data-act="orderRecipes">↕ Ordenar recetas</button><button class="btn" data-act="newRecipe">+ Nueva receta</button></div>
+  <div class="rowx"><input class="in" id="recQ" type="search" placeholder="🔍 Buscar receta…" value="${esc(recQ)}" style="flex:1;min-width:160px;border-radius:999px"></div><div class="rowx" style="gap:8px"><button class="btn" data-act="newRecipe">+ Nueva receta</button><button class="btn ghost" data-act="orderRecipes">↕ Ordenar</button><button class="btn ghost" data-act="copyRecs">📋 Copiar a otra tarjeta</button></div>
   ${q?`<span class="muted small">${list.length} resultado(s) para “${esc(recQ)}”</span>`:''}
   ${list.length?groups.map(g=>`${g.c?`<h2 class="sec" style="margin-top:6px">${esc(g.c.name)} <span class="muted small">${g.items.length}</span></h2>`:''}<div class="rlist">${g.items.map(card).join('')}</div>`).join(''):`<div class="empty card">No hay recetas aquí todavía. Carga la materia prima y crea la primera con “Nueva receta”.</div>`}
   </div>`;
 }
+/* ---------- $ y % dentro de los campos ---------- */
+function affixLabel(i){const f=i.closest('.field');if(f){const l=f.querySelector('label,.lab');if(l)return l.textContent}const td=i.closest('td');if(td){const idx=[...td.parentElement.children].indexOf(td);const th=td.closest('table')?.querySelector('thead tr')?.children[idx];if(th)return th.textContent}return ''}
+function affix(i){if(i.dataset.afx||!i.matches('input.in'))return;i.dataset.afx='1';if(/date|search|file|checkbox|email|password|url/.test(i.type))return;const im=i.getAttribute('inputmode');if(!i.classList.contains('num')&&!/numeric|decimal/.test(im||''))return;
+  const lab=(affixLabel(i)+' '+(i.placeholder||'')+' '+(i.getAttribute('aria-label')||''));let a='';
+  if(/%/.test(lab))a='%';else if(/\$/.test(lab))a='$';else if(/precio|valor|costo|total|monto|pag[oóa]|abono|venta|cobr/i.test(lab)&&!/^\s*(cant|porciones|presentaci|rendim|invitad|unidad)/i.test(lab))a='$';if(!a)return;
+  const w=document.createElement('span');w.className='afx '+(a==='%'?'afx-r':'afx-l');if(i.style.width){w.style.width=i.style.width;i.style.width='100%'}i.parentNode.insertBefore(w,i);w.appendChild(i);const t=document.createElement('i');t.textContent=a;w.appendChild(t);
+  if(i.placeholder==='$')i.placeholder='0'}
+new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes){if(n.nodeType!==1)continue;if(n.matches?.('input'))affix(n);n.querySelectorAll?.('input.in').forEach(affix)}}).observe(document.documentElement,{childList:true,subtree:true});
+/* ---------- copiar entre tarjetas ---------- */
+function copyIng(src,dst,i,upd){const ex=dst.ingredients.find(x=>norm(x.name)===norm(i.name));if(ex){if(upd)Object.assign(ex,{unit:i.unit,pack:i.pack,price:i.price,yield:i.yield??100});return{ing:ex,isNew:false}}
+  const n={id:uid(),name:i.name,unit:i.unit,pack:i.pack,price:i.price,yield:i.yield??100};dst.ingredients.push(n);return{ing:n,isNew:true}}
+function copyRec(src,dst,rec,stats,seen=new Map()){if(seen.has(rec.id))return seen.get(rec.id);
+  const cn=catName(src,rec.cat);let cat=null;if(cn){cat=dst.categories.find(c=>norm(c.name)===norm(cn));if(!cat){cat={id:uid(),name:cn};dst.categories.push(cat)}}
+  let name=rec.name;if(dst.recipes.some(x=>norm(x.name)===norm(name)))name+=' (copia)';
+  const n={...JSON.parse(JSON.stringify(rec)),id:uid(),name,cat:cat?.id||null,items:[]};delete n.example;seen.set(rec.id,n);
+  for(const it of rec.items||[]){const ing=src.ingredients.find(x=>x.id===it.ing);if(ing){const r2=copyIng(src,dst,ing,false);if(r2.isNew)stats.ing++;n.items.push({...it,ing:r2.ing.id});continue}
+    const sub=recipeById(src,it.ing);if(sub){const same=dst.recipes.find(x=>norm(x.name)===norm(sub.name));const d=same||copyRec(src,dst,sub,stats,seen);n.items.push({...it,ing:d.id,type:'recipe'})}}
+  dst.recipes.push(n);stats.rec++;return n}
+async function copySheet(R,kind,preIds){const others=S.meta.restaurants.filter(r=>r.id!==curR.id);if(!others.length)return toast('No hay otra tarjeta');
+  let dest=null,sel=new Set(preIds||[]),q='',upd=false;const P=$('#genPane');const items=kind==='mp'?[...R.ingredients].sort((a,b)=>(a.name||'').localeCompare(b.name||'','es')):[...R.recipes];
+  const draw=()=>{const L=items.filter(x=>!q||norm(x.name).includes(norm(q)));P.innerHTML=`<h2>Copiar ${kind==='mp'?'materia prima':'recetas'}</h2>
+    <div class="field"><span class="lab">¿A qué tarjeta?</span><div class="rowx" style="gap:6px">${others.map(r=>`<button type="button" class="tab" data-dst="${r.id}" aria-selected="${dest===r.id}" style="${dest===r.id?`background:${tone(r)};color:#fff`:''}">${esc(r.name)}</button>`).join('')}</div></div>
+    ${preIds?'':`<input class="in" id="cpQ" type="search" placeholder="🔍 Buscar…" value="${esc(q)}"><div class="rowx" style="gap:6px"><button class="btn sm ghost" id="cpAll">Seleccionar todo</button><button class="btn sm ghost" id="cpNone">Quitar</button><span class="sp"></span><small class="muted">${sel.size} seleccionado(s)</small></div>
+    <div class="paylist" style="max-height:42vh">${L.map(x=>`<button type="button" class="payit" data-cp="${x.id}" aria-pressed="${sel.has(x.id)}"><span class="ck"></span><span class="pn">${esc(x.name||'(sin nombre)')}<small>${kind==='mp'?`${esc(x.unit||'')} · ${nd(x.price)>0?money(x.price):'sin precio'}`:`${(x.items||[]).length} ingredientes`}</small></span></button>`).join('')}</div>`}
+    ${kind==='mp'?`<label class="rowx small" style="gap:8px"><input type="checkbox" id="cpUpd" ${upd?'checked':''}> Si ya existe en la otra tarjeta, actualizar su precio con el de aquí</label>`:'<span class="muted small">Se copian también los ingredientes y subrecetas que la receta necesite y no estén en la otra tarjeta.</span>'}
+    <button class="btn" id="cpGo" style="background:#173C32;color:#F3EBDD" ${dest&&sel.size?'':'disabled'}>Copiar${sel.size?` ${sel.size}`:''}</button><button class="btn ghost" id="cpX">Cancelar</button>`;
+    P.querySelectorAll('[data-dst]').forEach(b=>b.onclick=()=>{dest=b.dataset.dst;draw()});
+    P.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{const id=b.dataset.cp;sel.has(id)?sel.delete(id):sel.add(id);draw()});
+    const qi=$('#cpQ');if(qi)qi.oninput=()=>{q=qi.value;draw();setTimeout(()=>{const x=$('#cpQ');x.focus();x.setSelectionRange(x.value.length,x.value.length)},0)};
+    const al=$('#cpAll');if(al)al.onclick=()=>{L.forEach(x=>sel.add(x.id));draw()};const no=$('#cpNone');if(no)no.onclick=()=>{sel.clear();draw()};
+    const up=$('#cpUpd');if(up)up.onchange=()=>{upd=up.checked};$('#cpX').onclick=()=>$('#genSheet').hidden=true;
+    $('#cpGo').onclick=async()=>{const D=await loadR(dest);const st={ing:0,rec:0,upd:0,same:0};
+      if(kind==='mp'){for(const i of items.filter(x=>sel.has(x.id))){const r2=copyIng(R,D,i,upd);if(r2.isNew)st.ing++;else if(upd)st.upd++;else st.same++}}
+      else for(const rec of items.filter(x=>sel.has(x.id)))copyRec(R,D,rec,st);
+      saveR(dest);$('#genSheet').hidden=true;const dn=restById(dest)?.name||'';blip(1100);
+      toast(kind==='mp'?`Copiado a ${dn}: ${st.ing} nuevas${st.upd?`, ${st.upd} actualizadas`:''}${st.same?`, ${st.same} ya estaban`:''}`:`Copiado a ${dn}: ${st.rec} receta(s)${st.ing?` y ${st.ing} materia(s) prima(s)`:''}`)}};
+  draw();$('#genSheet').hidden=false}
 /* ---------- cuentas de colaboración ---------- */
 let colTab='resumen';
 function colabData(R){R.colab=R.colab||{};const C=R.colab;C.partners=C.partners||[];C.opPct=C.opPct??10;C.opTo=C.opTo||'';C.gastos=C.gastos||[];C.nomina=C.nomina||[];C.cortes=C.cortes||[];return C}
@@ -730,12 +769,12 @@ function mpView(R){
   const np=L.filter(i=>!(nd(i.price)>0)).length,un=L.filter(i=>!usesOf(i)).length;
   const F=[['all','Todas',L.length],['noprice','⚠ Sin precio',np],['used','En recetas',L.length-un],['unused','Sin usar',un]];
   return `<div class="stack">
-  <div class="rowx"><h2 class="sec">Materia prima</h2><span class="muted small">Costo por unidad = precio ÷ (presentación × rendimiento)</span><span class="sp"></span><button class="btn" data-act="addIng">+ Ingrediente</button></div>
+  <div class="rowx"><h2 class="sec">Materia prima</h2><span class="sp"></span><button class="btn" data-act="addIng">+ Ingrediente</button><button class="btn ghost" data-act="copyMP">📋 Copiar a otra tarjeta</button></div><span class="muted small">Costo por unidad = precio ÷ (presentación × rendimiento)</span>
   <div class="rowx"><input class="in" id="mpQ" type="search" placeholder="🔍 Buscar materia prima…" value="${esc(mpQ)}" style="flex:1;min-width:180px;border-radius:999px"></div>
   <div class="tabs" style="padding-top:0">${F.map(([k,l,n])=>`<button class="tab" data-mpf="${k}" aria-selected="${mpF===k}">${l} · ${n}</button>`).join('')}</div>
   <span class="muted small" id="mpCount"></span>
   <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Unidad</th><th>Presentación</th><th>Precio compra</th><th>Rendimiento %</th><th>Costo/unidad</th><th>En recetas</th><th></th></tr></thead><tbody>
-  ${L.map(i=>{const uses=usesOf(i);return `<tr data-ing="${i.id}" data-uses="${uses}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><button type="button" class="ubtn" data-unitpk>${esc(i.unit||'—')}</button></td><td><span class="packw"><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"><span class="usfx" data-usfx>${esc(i.unit||'')}</span></span></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price||''}" placeholder="⚠ sin precio" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
+  ${L.map(i=>{const uses=usesOf(i);return `<tr data-ing="${i.id}" data-uses="${uses}"><td class="w-name"><input class="in" data-f="name" value="${esc(i.name)}"></td><td><button type="button" class="ubtn" data-unitpk>${esc(i.unit||'—')}</button></td><td><input class="in num" data-f="pack" inputmode="decimal" value="${i.pack}" style="width:90px"></td><td><input class="in num" data-f="price" inputmode="numeric" value="${i.price||''}" placeholder="⚠ sin precio" style="width:110px"></td><td><input class="in num" data-f="yield" inputmode="decimal" value="${i.yield??100}" style="width:70px"></td><td class="num" data-uc><b>${money(unitCost(i))}</b>/${esc(i.unit)}</td><td class="num">${uses}</td><td><button class="x" data-del-ing="${i.id}" aria-label="Eliminar">✕</button></td></tr>`}).join('')}
   </tbody></table></div>${R.ingredients.length?'':'<div class="empty">Agrega tu primer ingrediente con su presentación y precio de compra.</div>'}</div>`;
 }
 function mpFilter(R){
@@ -768,7 +807,7 @@ function bindRest(R){
   const B=$('#rBody'),act=(a,f)=>{const b=B.querySelector(`[data-act="${a}"]`);if(b)b.onclick=f};
   B.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.open));
   B.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{curCat=b.dataset.cat;renderRest()});
-  act('cats',()=>openCats(R));
+  act('cats',()=>openCats(R));act('copyMP',()=>copySheet(R,'mp'));act('copyRecs',()=>copySheet(R,'rec'));
   act('orderRecipes',()=>openRecipeOrder(R));
   const rq=$('#recQ');if(rq)rq.oninput=()=>{recQ=rq.value;renderRest();setTimeout(()=>{const x=$('#recQ');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},20)};
   act('newRecipe',()=>{const r={id:uid(),name:'Nueva receta',cat:curCat!=='all'&&curCat!=='none'?curCat:(R.categories[0]?.id||null),portions:1,price:0,error:null,target:null,items:[]};R.recipes.push(r);saveR(curR.id);openRecipe(r.id)});
@@ -834,7 +873,7 @@ function renderRecipe(){
    <div class="tbl-wrap"><table><thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo/unidad</th><th>Costo en receta</th><th>% participación</th><th></th></tr></thead><tbody>
    ${c.lines.map((l,k)=>`<tr><td class="w-name"><b>${esc(l.ing?.name||'Ingrediente eliminado')}${l.subrecipe?(norm(catName(R,recipeById(R,l.it.ing)?.cat))==='subrecetas'?' · Subreceta':' · Receta'):''}</b></td><td><input class="in num" data-q="${k}" inputmode="decimal" value="${qShow(l.ing,l.it.qty)||''}" placeholder="0" style="width:90px"></td><td>${esc(uShow(l.ing))}</td><td class="num">${money(ucShow(l.ing,l.uc))}${!l.subrecipe&&(!l.ing||nd(l.ing.price)<=0)?' <span class="miss-dot" title="Sin precio">⚠</span>':''}</td><td class="num"><b data-lc="${k}">${money(l.cost)}</b></td><td class="num" style="min-width:110px"><span data-ls="${k}">${pct(l.share)}</span><div class="bar-p"><i data-lb="${k}" style="width:${(l.share*100).toFixed(1)}%"></i></div></td><td><button class="x" data-rm="${k}" aria-label="Quitar">✕</button></td></tr>`).join('')}
    <tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num"><b data-o="base">${money(c.base)}</b></td><td class="num">100%</td><td></td></tr></tbody></table></div>
-   <div class="rowx"><button class="btn ghost" id="dupRec">Duplicar receta</button><span class="sp"></span><button class="btn danger" id="delRec">Eliminar receta</button></div></div>`;
+   <div class="rowx"><button class="btn ghost" id="dupRec">Duplicar receta</button><button class="btn ghost" id="cpRec">📋 Copiar a otra tarjeta</button><span class="sp"></span><button class="btn danger" id="delRec">Eliminar receta</button></div></div>`;
   const sv=()=>saveR(curR.id);
   const RB=$('#reBody');const refresh=()=>{const c2=calc(r,R);const set=(k,v)=>RB.querySelectorAll(`[data-o="${k}"]`).forEach(e=>e.textContent=v);
     ['base','total','perPortion','contrib','net','netTotal','suggested'].forEach(k=>set(k,money(c2[k])));['foodCost','margin','err','target','opex'].forEach(k=>set(k,pct(c2[k])));set('portions',c2.portions);const mb=$('#missBox');if(mb)mb.innerHTML=missHTML(c2);
@@ -851,6 +890,7 @@ function renderRecipe(){
   addSearch.onfocus=paintsAddResults;addSearch.oninput=paintsAddResults;addSearch.onkeydown=e=>{if(e.key==='Escape')addResults.hidden=true};addSearch.onblur=()=>setTimeout(()=>{if(!addResults.contains(document.activeElement))addResults.hidden=true},120);
   $$('[data-q]').forEach(i=>{i.oninput=()=>{const it=r.items[+i.dataset.q];const ing=R.ingredients.find(x=>x.id===it.ing);it.qty=isOz(ing)?+(nd(i.value)*OZ).toFixed(3):nd(i.value);sv();refresh()};i.onchange=i.oninput});
   $$('[data-rm]').forEach(b=>b.onclick=()=>{r.items.splice(+b.dataset.rm,1);sv();renderRecipe()});
+  $('#cpRec').onclick=()=>copySheet(R,'rec',[r.id]);
   $('#dupRec').onclick=()=>{const cp=JSON.parse(JSON.stringify(r));cp.id=uid();cp.name=r.name+' (copia)';delete cp.example;R.recipes.push(cp);sv();curRec=cp;renderRecipe();toast('Receta duplicada')};
   $('#delRec').onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Toca otra vez para eliminar';return}R.recipes=R.recipes.filter(x=>x.id!==r.id);sv();back();toast('Receta eliminada')};
 }
@@ -1168,7 +1208,7 @@ function renderEvents(){
       <div class="rowx" style="flex-wrap:nowrap"><input class="in" data-rf="name" value="${esc(rr.name)}" placeholder="Nombre, ej: Pizza de jamón" style="flex:1;font-weight:800"><button class="x" data-rrm="${ri}" aria-label="Eliminar receta">✕</button></div>
       <div class="grid2"><div class="field"><label>Porciones que rinde</label><input class="in num" data-rf="portions" inputmode="decimal" value="${rr.portions||1}"></div><div class="field"><label>Margen de error %</label><input class="in num" data-rf="error" inputmode="decimal" value="${rr.error??5}"></div></div>
       <div class="stack" style="gap:6px">${(rr.items||[]).map((it,ii)=>`<div class="eline" style="padding:10px"><div class="rowx" style="flex-wrap:nowrap"><input class="in" data-if="name" data-ii="${ii}" value="${esc(it.name)}" placeholder="Ingrediente" style="flex:1;font-weight:700"><button class="x" data-irm="${ii}" aria-label="Quitar">✕</button></div>
-        <div class="egrid"><div class="field"><label>Cantidad (${esc(it.unit||'und')})</label><input class="in num" data-if="qty" data-ii="${ii}" inputmode="decimal" value="${it.qty||''}" placeholder="0"></div><div class="field"><label>Unidad</label><button type="button" class="ubtn" data-iu="${ii}">${esc(it.unit||'und')}</button></div><div class="field"><label>Costo por ${esc(it.unit||'und')}</label><input class="in num" data-if="uc" data-ii="${ii}" inputmode="decimal" value="${it.uc?+(+it.uc).toFixed(2):''}" placeholder="$"></div></div>
+        <div class="egrid"><div class="field"><label>Cantidad</label><input class="in num" data-if="qty" data-ii="${ii}" inputmode="decimal" value="${it.qty||''}" placeholder="0"></div><div class="field"><label>Unidad</label><button type="button" class="ubtn" data-iu="${ii}">${esc(it.unit||'und')}</button></div><div class="field"><label>Costo por unidad ($)</label><input class="in num" data-if="uc" data-ii="${ii}" inputmode="decimal" value="${it.uc?+(+it.uc).toFixed(2):''}" placeholder="$"></div></div>
         <div class="rowx small"><span class="muted">${it.src?esc(it.src):'Escrito a mano'}</span><span class="sp"></span><b class="num" data-it="${ii}">${money(nd(it.qty)*nd(it.uc))}</b></div></div>`).join('')}</div>
       <div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" data-isearch type="search" placeholder="Añadir ingrediente: busca en la MP o recetas de tus restaurantes…" autocomplete="off" style="padding-left:42px"><div class="add-results" data-ires hidden></div></div>
       <div class="kpis"><div class="kpi"><small>Costo ingredientes</small><b class="num" data-ro="base">${money(cc.base)}</b></div><div class="kpi"><small>+ Margen de error</small><b class="num" data-ro="total">${money(cc.total)}</b></div><div class="kpi hl"><small>Costo por porción</small><b class="num" data-ro="per">${money(cc.per)}</b></div></div>
@@ -1376,7 +1416,7 @@ function renderCtrl(){
      ${m.desc?`<div class="small">${esc(m.desc)}</div>`:''}
      <div class="rowx" style="gap:6px">${p?'':st(m)}${m.img?`<button class="btn sm ghost" data-vimg="${m.img}">Ver comprobante</button>`:''}${p?`<button class="btn sm" data-rcpt="${m.id}" style="background:#173C32;color:#F3EBDD">Recibo PDF</button>`:''}<span class="sp"></span><button class="x" data-lm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty">Sin movimientos todavía.</div>'}</div>`;
   B.querySelectorAll('[data-ty]').forEach(b=>b.onclick=()=>{ctTy=b.dataset.ty;ctImg=null;ctSel=[];renderCtrl()});
-  const selSync=()=>{let sum=0;B.querySelectorAll('[data-sel]').forEach(x=>{const on=ctSel.includes(x.dataset.sel);x.setAttribute('aria-pressed',on);if(on)sum+=+x.dataset.left});const inf=$('#ctSelInfo');if(inf)inf.textContent=ctSel.length?`${ctSel.length} seleccionado${ctSel.length>1?'s':''} · ${money(sum)}`:'';const a=$('#ctAmt');if(a&&ctSel.length)a.value=money(sum)};
+  const selSync=()=>{let sum=0;B.querySelectorAll('[data-sel]').forEach(x=>{const on=ctSel.includes(x.dataset.sel);x.setAttribute('aria-pressed',on);if(on)sum+=+x.dataset.left});const inf=$('#ctSelInfo');if(inf)inf.textContent=ctSel.length?`${ctSel.length} seleccionado${ctSel.length>1?'s':''} · ${money(sum)}`:'';const a=$('#ctAmt');if(a&&ctSel.length)a.value=Math.round(sum).toLocaleString('es-CO')};
   B.querySelectorAll('[data-sel]').forEach(b=>b.onclick=()=>{const id=b.dataset.sel;ctSel=ctSel.includes(id)?ctSel.filter(x=>x!==id):[...ctSel,id];blip(900,.02);selSync()});
   if($('#ctAll'))$('#ctAll').onclick=()=>{ctSel=AL.open.map(c=>c.m.id);selSync()};
   if($('#ctNone'))$('#ctNone').onclick=()=>{ctSel=[];selSync();$('#ctAmt').value=''};
@@ -1629,12 +1669,13 @@ async function socialSync(){
 setTimeout(socialSync,5000);
 setInterval(()=>{if(document.visibilityState==='visible')socialSync()},30000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')socialSync()});
+async function clearColabMP(){const R=S.r.colab_sm;if(!R||R.colab?.mpCleared)return;const used=new Set(R.recipes.flatMap(r=>(r.items||[]).map(i=>i.ing)));R.ingredients=R.ingredients.filter(i=>used.has(i.id));R.colab=R.colab||{};R.colab.mpCleared=true;await save('r_colab_sm',R,true)}
 async function fixColab45(){const R=S.r.colab_sm;const C=R?.colab;if(!C||C.fix45)return;const g=id=>C.partners.find(p=>p.id===id);
   if(g('p_mir')?.pct===40&&g('p_soc')?.pct===40&&g('p_jb')?.pct===10){g('p_mir').pct=45;g('p_soc').pct=45}C.fix45=true;await save('r_colab_sm',R,true)}
 async function makeColabSM(){const st=S.meta.settings;if(st.colabSMDone||S.meta.restaurants.some(r=>r.id==='colab_sm'))return;
   if(db&&db===window.__jbCloud){try{const m=(await db.doc('app/meta').get()).data();if(!m||m.settings?.colabSMDone||(m.restaurants||[]).some(r=>r.id==='colab_sm'))return}catch(e){return}}
   const soc=S.meta.restaurants.find(r=>/social/i.test(r.name)),mir=S.meta.restaurants.find(r=>/mirador/i.test(r.name));
-  const ings=[];for(const r of [soc,mir]){if(!r)continue;for(const i of (S.r[r.id]?.ingredients||[])){const k=norm(i.name);if(!k)continue;const prev=ings.find(x=>norm(x.name)===k);
+  const ings=[];for(const r of []){if(!r)continue;for(const i of (S.r[r.id]?.ingredients||[])){const k=norm(i.name);if(!k)continue;const prev=ings.find(x=>norm(x.name)===k);
     if(prev){if(!(nd(prev.price)>0)&&nd(i.price)>0)Object.assign(prev,{unit:i.unit,pack:i.pack,price:i.price,yield:i.yield??100});continue}ings.push({id:'c'+[...k].reduce((h,c)=>(h*31+c.charCodeAt(0))>>>0,7).toString(36),name:i.name.trim(),unit:i.unit,pack:i.pack,price:i.price,yield:i.yield??100})}}
   ings.sort((a,b)=>a.name.localeCompare(b.name,'es'));
   const pJB={id:'p_jb',name:'Juan Beltran',pct:10},pM={id:'p_mir',name:'Mirador del Cielo',pct:45},pS={id:'p_soc',name:'Social Drinks & Coffee',pct:45};
@@ -1661,7 +1702,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
