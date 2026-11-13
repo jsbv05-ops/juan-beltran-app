@@ -265,6 +265,7 @@ td .in{padding:6px 8px;border-radius:8px}
 .tile,[data-ci],[data-ri]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}.tile img,.tile .art{pointer-events:none;-webkit-user-drag:none;-webkit-touch-callout:none}#shelf.sorting{overflow:hidden!important;touch-action:none}
 .dragging{position:relative;z-index:5;box-shadow:0 14px 34px #0007!important;opacity:.95;transition:none!important}.sorting>*:not(.dragging){transition:transform .18s ease}
 .sorting{user-select:none;-webkit-user-select:none}.grip{cursor:grab;opacity:.55;font-size:18px;padding:0 6px;user-select:none}
+.tcount{display:inline-block;min-width:22px;padding:1px 7px;margin-left:4px;border-radius:999px;background:#B8913A;color:#173C32;font-size:.8em;font-weight:800;text-align:center}
 .ubtn{min-width:56px;padding:8px 12px;border-radius:999px;border:0;background:#173C32;color:#F3EBDD;font:inherit;font-weight:800;font-size:14px;cursor:pointer}
 .ubtn::after{content:" ▾";opacity:.7;font-size:11px}
 .packw{display:inline-flex;align-items:center;gap:6px}.usfx{font-weight:800;font-size:13px;color:#B8913A;min-width:22px}
@@ -367,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.0</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.1</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -652,7 +653,7 @@ function recipesView(R){
   const card=r=>{const c=calc(r,R),sub=isSubrecipeRecipe(R,r);return `<button class="rc" data-open="${r.id}">${r.example?'<span class="ex">Ejemplo</span>':''}<h3>${esc(r.name)}</h3><span class="muted small">${c.portions} porción${c.portions>1?'es':''} · ${r.items.length} ingredientes</span>${sub?`<div class="k3" style="grid-template-columns:1fr 1fr"><div><small>Costo por porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Margen de error</small><b class="num">${pct(c.err)}</b></div></div>`:`<div class="k3"><div><small>Costo/porción</small><b class="num">${money(c.perPortion)}</b></div><div><small>Precio</small><b class="num">${money(c.price)}</b></div><div><small>Ganancia</small><b>${mchip(c.margin,c.target)}</b></div></div>`}${!r.items.length?`<span class="miss">⚠ Sin ingredientes: falta la receta</span>`:c.missing.length?`<span class="miss">⚠ Falta precio de ${c.missing.length} ingrediente${c.missing.length>1?'s':''}</span>`:''}</button>`};
   return `<div class="stack">
   <div class="kpis"><div class="kpi hl"><small>Recetas</small><b class="num">${R.recipes.length}</b></div>${isSubCategory?'':`<div class="kpi"><small>Margen promedio</small><b class="num">${pct(avgM)}</b></div>`}<div class="kpi"><small>Categorías</small><b class="num">${R.categories.length}</b></div><div class="kpi"><small>Materias primas</small><b class="num">${R.ingredients.length}</b></div></div>
-  <div class="tabs" style="padding-top:0"><button class="tab" data-cat="all" aria-selected="${curCat==='all'}">Todas</button>${R.categories.map(c=>`<button class="tab" data-cat="${c.id}" aria-selected="${curCat===c.id}">${esc(c.name)}</button>`).join('')}<button class="tab" data-act="cats">✎ Categorías</button></div>
+  <div class="tabs" style="padding-top:0"><button class="tab" data-cat="all" aria-selected="${curCat==='all'}">Todas <span class="tcount">${R.recipes.length}</span></button>${R.categories.map(c=>`<button class="tab" data-cat="${c.id}" aria-selected="${curCat===c.id}">${esc(c.name)} <span class="tcount">${R.recipes.filter(r=>r.cat===c.id).length}</span></button>`).join('')}${R.recipes.some(r=>!R.categories.some(c=>c.id===r.cat))?`<button class="tab" data-cat="none" aria-selected="${curCat==='none'}">Sin categoría <span class="tcount">${R.recipes.filter(r=>!R.categories.some(c=>c.id===r.cat)).length}</span></button>`:''}<button class="tab" data-act="cats">✎ Categorías</button></div>
   <div class="rowx"><input class="in" id="recQ" type="search" placeholder="🔍 Buscar receta…" value="${esc(recQ)}" style="flex:1;min-width:160px;border-radius:999px"></div><div class="rowx" style="gap:8px"><button class="btn" data-act="newRecipe">+ Nueva receta</button><button class="btn ghost" data-act="orderRecipes">↕ Ordenar</button><button class="btn ghost" data-act="copyRecs">📋 Copiar a otra tarjeta</button></div>
   ${q?`<span class="muted small">${list.length} resultado(s) para “${esc(recQ)}”</span>`:''}
   ${list.length?groups.map(g=>`${g.c?`<h2 class="sec" style="margin-top:6px">${esc(g.c.name)} <span class="muted small">${g.items.length}</span></h2>`:''}<div class="rlist">${g.items.map(card).join('')}</div>`).join(''):`<div class="empty card">No hay recetas aquí todavía. Carga la materia prima y crea la primera con “Nueva receta”.</div>`}
