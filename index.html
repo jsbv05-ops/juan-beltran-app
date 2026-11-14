@@ -368,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.4</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.5</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -376,6 +376,7 @@ td .in{padding:6px 8px;border-radius:8px}
   <div class="hd gut"><button class="back" data-back aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><div class="logo" id="rLogo"></div><h1 id="rName"></h1><button class="btn sm ghost" id="rEdit">Editar</button></div>
   <div class="gut"><div class="tabs" role="tablist" id="rTabs">
     <button class="tab" role="tab" data-tab="colab" id="tabColab" hidden>💰 Cuentas</button>
+    <button class="tab" role="tab" data-tab="j2ev" id="tabJ2" hidden>🎉 Eventos</button>
     <button class="tab" role="tab" data-tab="recipes">🍽 Recetas</button>
     <button class="tab" role="tab" data-tab="mp">🧺 Materia prima</button>
     <button class="tab" role="tab" data-tab="global">⚙️ Ajustes</button>
@@ -636,16 +637,34 @@ const isSubrecipeRecipe=(R,r)=>norm(catName(R,r?.cat))==='subrecetas';
 
 /* ---------- restaurante ---------- */
 let curR=null,curTab='recipes',curCat='all',recQ='';
-async function openRest(id){curR=restById(id);await loadR(id);curTab=curR.colab?'colab':'recipes';curCat='all';recQ='';mpF='all';mpQ='';go('rest');renderRest()}
+async function openRest(id){curR=restById(id);await loadR(id);curTab=curR.colab?'colab':isJ2(curR)?'j2ev':'recipes';curCat='all';recQ='';mpF='all';mpQ='';go('rest');renderRest()}
 $('#rEdit').onclick=()=>openCard(curR);
 $$('#rTabs .tab').forEach(t=>t.onclick=()=>{curTab=t.dataset.tab;renderRest()});
 function renderRest(){
   if(!curR)return;const R=S.r[curR.id];
   $('#rName').textContent=curR.name;const lg=$('#rLogo');lg.style.background=tone(curR);lg.innerHTML=rFace(curR);
-  $('#tabColab').hidden=!curR.colab;if(curTab==='colab'&&!curR.colab)curTab='recipes';
+  $('#tabColab').hidden=!curR.colab;if(curTab==='colab'&&!curR.colab)curTab='recipes';$('#tabJ2').hidden=!isJ2(curR);if(curTab==='j2ev'&&!isJ2(curR))curTab='recipes';
   $$('#rTabs .tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.tab===curTab));
-  const B=$('#rBody');B.innerHTML={recipes:recipesView,mp:mpView,global:globalView,export:exportView,colab:colabView}[curTab](R);bindRest(R);if(curTab==='colab')bindColab(R);
+  const B=$('#rBody');B.innerHTML={recipes:recipesView,mp:mpView,global:globalView,export:exportView,colab:colabView,j2ev:j2View}[curTab](R);bindRest(R);if(curTab==='colab')bindColab(R);if(curTab==='j2ev')bindJ2(R);
 }
+const isJ2=r=>!!r&&(r.j2||r.id==='j2'||/^j2$/i.test((r.name||'').trim()));
+function j2Socios(R){return R.socios||(R.socios=[{id:'s1',name:'Juan Beltran',pct:50},{id:'s2',name:'Juanse Quiñones',pct:50}])}
+function j2View(R){const ps=j2Socios(R);const L=S.events.items.filter(ev=>evR(ev).includes(curR.id)).sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
+  const rows=L.map(ev=>({ev,c:evCalc(ev)}));const act=rows.filter(x=>x.ev.status!=='lost');const tot=act.reduce((a,x)=>a+x.c.profit,0),sale=act.reduce((a,x)=>a+x.c.sale,0);const tp=ps.reduce((a,p)=>a+nd(p.pct),0);const okp=Math.abs(tp-100)<0.01;
+  return `<div class="stack">
+   <div class="kpis"><div class="kpi"><small>Eventos</small><b class="num">${act.length}</b></div><div class="kpi"><small>Ventas</small><b class="num">${money(sale)}</b></div><div class="kpi hl"><small>Ganancia total</small><b class="num">${money(tot)}</b></div></div>
+   <div class="card stack"><div class="rowx"><h2 class="sec">Socios de J2</h2><span class="sp"></span><button class="btn sm ghost" id="j2pAdd">+ Socio</button></div>
+    ${ps.map((p,k)=>`<div class="rowx" style="flex-wrap:nowrap;gap:8px"><input class="in" data-j2p="${k}" data-f="name" value="${esc(p.name)}" placeholder="Nombre" style="flex:1;min-width:0;font-weight:700"><input class="in num" data-j2p="${k}" data-f="pct" inputmode="decimal" value="${p.pct}" style="width:76px"><b class="num" style="min-width:96px;text-align:right">${money(tot*nd(p.pct)/100)}</b><button class="x" data-j2rm="${k}" aria-label="Quitar">✕</button></div>`).join('')}
+    <span class="small ${okp?'muted':''}" style="${okp?'':'color:var(--bad)'}">Suma: ${fq(tp)}%${okp?' · reparto de la ganancia de todos los eventos de J2 (menos los que no se hicieron)':' (debe dar 100%)'}</span></div>
+   <div class="rowx"><h2 class="sec">Eventos de J2</h2><span class="sp"></span><button class="btn" id="j2New" style="background:#151515;color:#F3EBDD">+ Nuevo evento</button></div>
+   ${rows.length?`<div class="rlist">${rows.map(({ev,c})=>`<button class="rc" data-j2ev="${ev.id}"><span class="rowx"><span class="chip" style="background:var(--fg);color:var(--bg)">${ST[ev.status]||''}</span><span class="muted small">${fdate(ev.date)}${ev.guests?` · ${ev.guests} invitados`:''}</span></span><h3>${esc(ev.name)}</h3><div class="k3"><div><small>Venta</small><b class="num">${money(c.sale)}</b></div><div><small>Costo</small><b class="num">${money(c.total)}</b></div><div><small>Ganancia</small><b class="num">${money(c.profit)}</b></div></div><span class="muted small">${ps.map(p=>`${esc((p.name||'Socio').split(' ')[0])}: ${money(c.profit*nd(p.pct)/100)}`).join(' · ')}</span></button>`).join('')}</div>`:'<div class="empty card">Aún no hay eventos de J2. Crea uno aquí o, en un evento que ya tengas, marca J2 en “Para quién es”.</div>'}
+  </div>`}
+function bindJ2(R){const ps=j2Socios(R);const sv=()=>saveR(curR.id);
+  $$('[data-j2p]').forEach(i=>{i.oninput=()=>{const p=ps[+i.dataset.j2p];p[i.dataset.f]=i.dataset.f==='name'?i.value:nd(i.value);sv()};i.onchange=()=>renderRest()});
+  $$('[data-j2rm]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}ps.splice(+b.dataset.j2rm,1);sv();renderRest()});
+  const pa=$('#j2pAdd');if(pa)pa.onclick=()=>{ps.push({id:uid(),name:'',pct:0});sv();renderRest()};
+  const nw=$('#j2New');if(nw)nw.onclick=async()=>{const ev={id:uid(),name:'Nuevo evento J2',date:'',place:'',type:'own',status:'cot',guests:0,notes:'',lines:[],error:5,target:40,priceMode:'person',price:0,partners:[],buys:[],jb:false,rids:[curR.id],mp:[]};S.events.items.push(ev);save('events',S.events);await loadAllR();curEv=ev;evTab='datos';go('events');renderEvents()};
+  $$('[data-j2ev]').forEach(b=>b.onclick=async()=>{await loadAllR();curEv=S.events.items.find(e=>e.id===b.dataset.j2ev);evTab='datos';go('events');renderEvents()})}
 function recipesView(R){
   const q=norm(recQ);const list=R.recipes.filter(r=>(curCat==='all'||(curCat==='none'?!R.categories.some(c=>c.id===r.cat):r.cat===curCat))&&(!q||norm(r.name).includes(q)||norm(catName(R,r.cat)).includes(q)));
   const isSubCategory=curCat!=='all'&&curCat!=='none'&&norm(catName(R,curCat))==='subrecetas';const sum=R.recipes.map(r=>calc(r,R));const avgM=sum.length?sum.reduce((a,c)=>a+c.margin,0)/sum.length:0;
@@ -1310,6 +1329,7 @@ function renderEvents(){
     <div class="field"><label for="eEr">${c.hasRec?'Margen de error % (otros costos)':'Margen de error %'}</label><input class="in num" id="eEr" data-e="error" data-num="1" inputmode="decimal" value="${ev.error}"></div><div class="field"><label for="eTg">Margen objetivo %</label><input class="in num" id="eTg" data-e="target" data-num="1" inputmode="decimal" value="${ev.target}"></div></div>
     <div class="kpis"><div class="kpi"><small>Costo + margen de error</small><b class="num" data-o="total">${money(c.total)}</b></div><div class="kpi"><small>Venta por invitado</small><b class="num" data-o="salePerGuest">${money(c.salePerGuest)}</b></div><div class="kpi"><small>Precio sugerido total</small><b class="num" data-o="sugg">${money(c.sugg)}</b></div><div class="kpi"><small>Sugerido por invitado</small><b class="num" data-o="suggPer">${money(c.suggPer)}</b></div></div>
     <div class="rowx"><button class="btn ghost sm" id="eUseSug">Usar precio sugerido</button></div></div>`;
+  if(evTab==='precio'){const j=S.meta.restaurants.find(r=>isJ2(r)&&evR(ev).includes(r.id));if(j&&S.r[j.id]){const ps=j2Socios(S.r[j.id]);h+=`<div class="card stack"><b>Reparto entre socios de J2</b>${ps.map(p=>`<div class="rowx"><span>${esc(p.name||'Socio')} · ${fq(nd(p.pct))}%</span><span class="sp"></span><b class="num">${money(c.profit*nd(p.pct)/100)}</b></div>`).join('')}<span class="muted small">Los socios y porcentajes se cambian en la tarjeta de J2.</span></div>`}}
   if(evTab==='socios'){const ps=ev.partners||[];const tp=ps.reduce((a,p)=>a+nd(p.pct),0);
     h+=`<div class="card stack"><span class="muted small">Reparto de la utilidad (${money(c.profit)}). Lo que puso cada socio en costos se le devuelve aparte si lo anotas.</span>
      <div class="tbl-wrap"><table style="min-width:520px"><thead><tr><th>Socio</th><th>% utilidad</th><th>Aportó en costos</th><th>Le corresponde</th><th></th></tr></thead><tbody>
@@ -1813,6 +1833,15 @@ async function makeEvMangoFresa(){if(S.events.mf1||S.events.items.some(e=>/mango
   const rr={id:uid(),name:'Mango-Fresa Shake',portions:1,error:0,items:[mp('Mango tomy','g',40),mp('Fresas','g',30),mp('Zumo de limon','ml',20),mp('Azucar Blanca','g',12.5),{name:'Agua',unit:'ml',qty:42.5,uc:0},mp('Hielo','g',200,soc),mp('Vasos y tapas 16oz Darnel (jugos) x24','und',1),mp('Pitillo plastico','und',1)]};
   const ev={id:uid(),name:'Evento juventudes · Mango-Fresa',date:'',place:'',type:'own',status:'cot',guests:150,notes:'150 mocktails Mango-Fresa Shake. Base licuada lista (mango, fresa, limón, sirope, agua): 145 ml por bebida, shaker con hielo 10 s y al vaso. Meta: mínimo $300.000 de ganancia.',error:5,target:37.5,priceMode:'total',price:800000,partners:[],buys:[],recipes:[rr],lines:[{id:uid(),recId:rr.id,name:rr.name,cat:'Bebidas',qty:150,cost:Math.round(erCalc(rr).per)}]};
   S.events.items.push(ev);S.events.mf1=true;await save('events',S.events,true)}
+function j2Logo(){try{const c=document.createElement('canvas');c.width=c.height=240;const x=c.getContext('2d');x.fillStyle='#151515';x.fillRect(0,0,240,240);
+  x.strokeStyle='#F3EBDD';x.lineWidth=4.5;x.lineCap='round';x.beginPath();x.moveTo(120,37);x.bezierCurveTo(180,35,211,72,209,118);x.bezierCurveTo(206,166,170,198,118,200);x.bezierCurveTo(67,203,30,168,32,118);x.bezierCurveTo(35,71,66,40,122,36);x.stroke();
+  x.save();x.translate(120,120);x.rotate(-0.1);x.fillStyle='#F3EBDD';x.font='900 92px Inter, system-ui, sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('J2',0,-4);x.restore();
+  x.fillStyle='#B8913A';x.font='700 12px Inter, system-ui, sans-serif';x.textAlign='center';x.fillText('B A R   C A T E R I N G',120,172);return c.toDataURL('image/jpeg',.85)}catch(e){return null}}
+async function makeJ2(){const st=S.meta.settings;if(st.j2Done||S.meta.restaurants.some(r=>isJ2(r)))return;
+  if(db&&db===window.__jbCloud){try{const m=(await db.doc('app/meta').get()).data();if(!m||m.settings?.j2Done||(m.restaurants||[]).some(r=>isJ2(r)))return}catch(e){return}}
+  S.r.j2=fixR({socios:[{id:'s1',name:'Juan Beltran',pct:50},{id:'s2',name:'Juanse Quiñones',pct:50}]});
+  S.meta.restaurants.push({id:'j2',name:'J2',color:'#151515',logo:j2Logo(),j2:true});st.j2Done=true;
+  await save('r_j2',S.r.j2,true);await save('meta',S.meta,true)}
 async function makeDesayuno(){const st=S.meta.settings;if(st.desayunoDone||S.meta.restaurants.some(r=>r.id==='desayuno'||norm(r.name)==='desayuno'))return;
   if(db&&db===window.__jbCloud){try{const m=(await db.doc('app/meta').get()).data();if(!m||m.settings?.desayunoDone||(m.restaurants||[]).some(r=>r.id==='desayuno'))return}catch(e){return}}
   const ings=[];for(const r of S.meta.restaurants){for(const i of (S.r[r.id]?.ingredients||[])){const k=norm(i.name);if(!k)continue;const prev=ings.find(x=>norm(x.name)===k);
@@ -1832,7 +1861,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa();await makeJ2()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
