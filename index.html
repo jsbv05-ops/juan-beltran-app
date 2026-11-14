@@ -368,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.2</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.3</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1210,14 +1210,30 @@ const ECAT=['Insumos','Bebidas','Personal','Logística','Alquiler','Otros'];
 let curEv=null,evTab='datos';
 function erCalc(rr){const base=(rr.items||[]).reduce((a,it)=>a+nd(it.qty)*nd(it.uc),0);const err=nd(rr.error??5)/100;const total=base*(1+err);const por=Math.max(nd(rr.portions)||1,1);return{base,err,total,per:total/por,por}}
 function evSyncLines(ev){(ev.lines||[]).forEach(l=>{if(l.recId){const rr=(ev.recipes||[]).find(x=>x.id===l.recId);if(rr){l.cost=Math.round(erCalc(rr).per);l.name=rr.name}}})}
-function allMP(){const out=[];const seen=new Set();for(const r of S.meta.restaurants){const R=S.r[r.id];if(!R)continue;for(const i of R.ingredients||[]){const k=norm(i.name);if(!k)continue;const uc=unitCost(i);const prev=out.find(x=>x.k===k);if(prev){if(!(prev.uc>0)&&uc>0)Object.assign(prev,{uc,unit:i.unit,rname:r.name});continue}out.push({k,name:i.name,unit:i.unit,uc,rname:r.name,kind:'mp'})}
+function allMP(){const out=[];const seen=new Set();for(const r of S.meta.restaurants){const R=S.r[r.id];if(!R)continue;for(const i of R.ingredients||[]){const k=norm(i.name);if(!k)continue;const uc=unitCost(i);const pkI={pk:nd(i.pack),pp:nd(i.price),yl:nd(i.yield||100)||100};const prev=out.find(x=>x.k===k);if(prev){if(!(prev.uc>0)&&uc>0)Object.assign(prev,{uc,unit:i.unit,rname:r.name},pkI);continue}out.push({k,name:i.name,unit:i.unit,uc,rname:r.name,kind:'mp',...pkI})}
   for(const x of R.recipes||[]){out.push({k:'rec:'+r.id+x.id,name:x.name,unit:'porción',uc:recipeCostPerPortion(x,R),rname:r.name,kind:'rec'})}}return out}
+let _mpc=null,_mpt=0;function allMPc(){if(!_mpc||Date.now()-_mpt>3000){_mpc=allMP();_mpt=Date.now()}return _mpc}
+function itPack(it){if(nd(it.pk)>0)return{pk:nd(it.pk),pp:nd(it.pp),yl:nd(it.yl||100)||100};const k=norm(it.name);if(!k||String(it.src||'').startsWith('Receta'))return null;
+  const m=allMPc().find(x=>x.kind==='mp'&&x.k===k&&x.unit===it.unit&&x.pk>0&&x.pp>0);return m?{pk:m.pk,pp:m.pp,yl:m.yl||100}:null}
+const fq=v=>(+(+v).toFixed(2)).toLocaleString('es-CO');
+function evBuy(ev){const need=[];
+  for(const l of ev.lines||[]){const rr=l.recId&&(ev.recipes||[]).find(x=>x.id===l.recId);
+    if(!rr){if(['Insumos','Bebidas'].includes(l.cat)&&l.name)need.push({id:l.id||l.name,name:l.name,qty:nd(l.qty),unit:'',cost:nd(l.cost),line:1});continue}
+    const f=nd(l.qty)/Math.max(nd(rr.portions)||1,1);
+    for(const it of rr.items||[]){if(!it.name)continue;const key='rec:'+norm(it.name);let x=need.find(n=>n.id===key);
+      if(!x){const pk=itPack(it);x={id:key,name:it.name,qty:0,cost:nd(it.uc)||(pk&&pk.pk>0?pk.pp/(pk.pk*pk.yl/100):0),unit:it.unit,pk,rec:1};need.push(x)}x.qty=+(x.qty+nd(it.qty)*f).toFixed(2)}}
+  for(const x of need){x.exact=x.qty*x.cost;if(x.line||!x.pk||!(x.pk.pp>0)){x.buy=x.exact;continue}
+    const gross=x.qty/((x.pk.yl||100)/100);x.packs=x.qty>0?Math.ceil(gross/x.pk.pk-1e-6):0;x.buy=x.packs*x.pk.pp;x.left=Math.max(x.packs*x.pk.pk-gross,0)}
+  return need}
 function evCalc(ev){evSyncLines(ev);
-  const lines=ev.lines||[];const base=lines.reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0);const err=nd(ev.error)/100;const total=base*(1+err);
+  const lines=ev.lines||[];const isRec=l=>l.recId&&(ev.recipes||[]).some(r=>r.id===l.recId);const buyList=evBuy(ev);
+  const theoRec=lines.filter(isRec).reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0),realRec=buyList.filter(x=>x.rec).reduce((a,x)=>a+x.buy,0);
+  const theo=lines.reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0);const base=theo-theoRec+realRec;const adj=base-theo;const sc=theoRec>0?realRec/theoRec:1;
+  const err=nd(ev.error)/100;const total=base*(1+err);
   const guests=Math.max(nd(ev.guests),0);const sale=ev.priceMode==='person'?nd(ev.price)*guests:nd(ev.price);
   const profit=sale-total;const margin=sale>0?profit/sale:0;const target=nd(ev.target)/100;const sugg=target<1?total/(1-target):0;
-  const byCat=ECAT.map(c=>({c,v:lines.filter(l=>l.cat===c).reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0)})).filter(x=>x.v>0);
-  return{base,err,total,guests,sale,profit,margin,perGuest:guests?total/guests:0,salePerGuest:guests?sale/guests:0,sugg,suggPer:guests?sugg/guests:0,byCat};
+  const byCat=ECAT.map(c=>({c,v:lines.filter(l=>l.cat===c).reduce((a,l)=>a+nd(l.qty)*nd(l.cost)*(isRec(l)?sc:1),0)})).filter(x=>x.v>0);
+  return{base,theo,adj,buyList,err,total,guests,sale,profit,margin,perGuest:guests?total/guests:0,salePerGuest:guests?sale/guests:0,sugg,suggPer:guests?sugg/guests:0,byCat};
 }
 const evR=ev=>ev.rids||(ev.rid?[ev.rid]:[]);
 const evJB=ev=>ev.jb??(evR(ev).length===0);
@@ -1254,6 +1270,7 @@ function renderEvents(){
       <div class="grid2"><div class="field"><label>Porciones que rinde</label><input class="in num" data-rf="portions" inputmode="decimal" value="${rr.portions||1}"></div><div class="field"><label>Margen de error %</label><input class="in num" data-rf="error" inputmode="decimal" value="${rr.error??5}"></div></div>
       <div class="stack" style="gap:6px">${(rr.items||[]).map((it,ii)=>`<div class="eline" style="padding:10px"><div class="rowx" style="flex-wrap:nowrap"><input class="in" data-if="name" data-ii="${ii}" value="${esc(it.name)}" placeholder="Ingrediente" style="flex:1;font-weight:700"><button class="x" data-irm="${ii}" aria-label="Quitar">✕</button></div>
         <div class="egrid"><div class="field"><label>Cantidad</label><input class="in num" data-if="qty" data-ii="${ii}" inputmode="decimal" value="${it.qty||''}" placeholder="0"></div><div class="field"><label>Unidad</label><button type="button" class="ubtn" data-iu="${ii}">${esc(it.unit||'und')}</button></div><div class="field"><label>Costo por unidad ($)</label><input class="in num" data-if="uc" data-ii="${ii}" inputmode="decimal" value="${it.uc?+(+it.uc).toFixed(2):''}" placeholder="$"></div></div>
+        ${(()=>{const pk=itPack(it)||{};return `<div class="egrid"><div class="field"><label>Lo venden en (${esc(it.unit||'und')})</label><input class="in num" data-if="pk" data-ii="${ii}" inputmode="decimal" value="${pk.pk?+(+pk.pk).toFixed(2):''}" placeholder="ej: 500"></div><div class="field"><label>Rinde %</label><input class="in num" data-if="yl" data-ii="${ii}" inputmode="decimal" value="${pk.pk?+(+pk.yl).toFixed(1):''}" placeholder="100"></div><div class="field"><label>Precio del paquete</label><input class="in num" data-if="pp" data-ii="${ii}" inputmode="decimal" value="${pk.pp?Math.round(pk.pp):''}" placeholder="$"></div></div>`})()}
         <div class="rowx small"><span class="muted">${it.src?esc(it.src):'Escrito a mano'}</span><span class="sp"></span><b class="num" data-it="${ii}">${money(nd(it.qty)*nd(it.uc))}</b></div></div>`).join('')}</div>
       <div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" data-isearch type="search" placeholder="Añadir ingrediente: busca en la MP o recetas de tus restaurantes…" autocomplete="off" style="padding-left:42px"><div class="add-results" data-ires hidden></div></div>
       <div class="kpis"><div class="kpi"><small>Costo ingredientes</small><b class="num" data-ro="base">${money(cc.base)}</b></div><div class="kpi"><small>+ Margen de error</small><b class="num" data-ro="total">${money(cc.total)}</b></div><div class="kpi hl"><small>Costo por porción</small><b class="num" data-ro="per">${money(cc.per)}</b></div></div>
@@ -1263,7 +1280,8 @@ function renderEvents(){
     <div class="stack" style="gap:8px">${(ev.lines||[]).map((l,k)=>{const t=nd(l.qty)*nd(l.cost);return `<div class="eline"><div class="rowx" style="flex-wrap:nowrap"><input class="in" data-l="${k}" data-lf="name" value="${esc(l.name)}" placeholder="Concepto, ej: Ron añejo" style="flex:1;font-weight:700" ${l.recId?'readonly':''}><button class="x" data-lrm="${k}" aria-label="Quitar">✕</button></div>
      <div class="egrid"><div class="field"><label>Tipo</label><button type="button" class="in" data-lcat="${k}" style="text-align:left">${esc(l.cat)} ▾</button></div><div class="field"><label>Cantidad</label><input class="in num" data-l="${k}" data-lf="qty" inputmode="decimal" value="${l.qty}"></div><div class="field"><label>${l.recId?'Costo por porción':'Costo unitario'}</label>${l.recId?`<div class="in num" style="opacity:.85">${money(l.cost)}</div>`:`<input class="in num" data-l="${k}" data-lf="cost" inputmode="numeric" value="${l.cost||''}" placeholder="$">`}</div></div>${l.recId?'<span class="muted small">🍳 Receta del evento · el costo se actualiza solo</span>':''}
      <div class="rowx small"><span class="muted">Total línea</span><b class="num" data-lt="${k}">${money(t)}</b><span class="sp"></span><span class="muted num" data-lp="${k}">${pct(c.base?t/c.base:0)}</span></div></div>`}).join('')||'<div class="empty card">Agrega la primera línea de costo.</div>'}
-     <div class="rowx card" style="padding:12px 14px"><b>Total costos</b><span class="sp"></span><b class="num" data-o="base">${money(c.base)}</b></div>
+     ${Math.abs(c.adj)>=1?`<div class="card stack" style="padding:12px 14px;gap:4px"><div class="rowx"><span>Costo según receta</span><span class="sp"></span><span class="num" data-o="theo">${money(c.theo)}</span></div><div class="rowx"><span>+ Ajuste por comprar paquetes completos</span><span class="sp"></span><b class="num" data-o="adj">${money(c.adj)}</b></div><span class="muted small">Se compra lo que venden (ej: 500 g de fresa aunque uses 400 g). Mira el detalle en “Compras del evento”.</span></div>`:''}
+     <div class="rowx card" style="padding:12px 14px"><b>Total costos${Math.abs(c.adj)>=1?' (lo que vas a comprar)':''}</b><span class="sp"></span><b class="num" data-o="base">${money(c.base)}</b></div>
      <button class="btn ghost" id="eAdd2">+ Agregar otra línea</button></div>
     ${c.byCat.length?`<div class="legend">${c.byCat.map(x=>`<span class="chip" style="background:var(--grey)">${x.c}: ${money(x.v)}</span>`).join('')}</div>`:''}
     <span class="muted small">Las líneas de Insumos y Bebidas pasan solas a “Compras del evento”.</span>`;
@@ -1279,10 +1297,12 @@ function renderEvents(){
      ${ps.map((p,k)=>`<tr><td class="w-name"><input class="in" data-p="${k}" data-pf="name" value="${esc(p.name)}" list="pList"></td><td><input class="in num" data-p="${k}" data-pf="pct" inputmode="decimal" value="${p.pct}" style="width:70px"></td><td><input class="in num" data-p="${k}" data-pf="put" inputmode="decimal" value="${p.put||0}" style="width:110px"></td><td class="num"><b data-pt="${k}">${money(c.profit*nd(p.pct)/100+nd(p.put))}</b></td><td><button class="x" data-prm="${k}">✕</button></td></tr>`).join('')}
      </tbody></table></div><datalist id="pList"><option value="Juan Beltran">${S.meta.restaurants.map(r=>`<option value="${esc(r.name)}">`).join('')}</datalist>
      <div class="rowx"><span class="small ${Math.abs(tp-100)<0.01?'muted':''}" style="${Math.abs(tp-100)<0.01?'':'color:var(--bad)'}">Suma: ${tp}%${Math.abs(tp-100)<0.01?'':' (debe dar 100%)'}</span><span class="sp"></span><button class="btn sm" id="pAdd">+ Socio</button></div></div>`}
-  if(evTab==='compras'){const need0=(ev.lines||[]).filter(l=>['Insumos','Bebidas'].includes(l.cat)&&l.name);ev.buys=ev.buys||[];const need=[];
-    for(const l of need0){const rr=l.recId&&(ev.recipes||[]).find(x=>x.id===l.recId);if(!rr){need.push(l);continue}const f=nd(l.qty)/Math.max(nd(rr.portions)||1,1);
-      for(const it of rr.items||[]){if(!it.name)continue;const key='rec:'+norm(it.name);let x=need.find(n=>n.id===key);if(!x){x={id:key,name:it.name,qty:0,cost:nd(it.uc),unit:it.unit};need.push(x)}x.qty=+(x.qty+nd(it.qty)*f).toFixed(2)}}
-    h+=`<div class="card stack"><b>Lista de compras del evento</b>${need.length?need.map(l=>{const got=ev.buys.includes(l.id||l.name);return `<label class="task ${got?'done':''}" style="box-shadow:none;padding:6px 0"><input type="checkbox" data-buyev="${esc(l.id||l.name)}" ${got?'checked':''}><span class="t"><b>${esc(l.name)}</b><small class="muted">${l.qty}${l.unit?' '+esc(l.unit):''} · ${money(nd(l.qty)*nd(l.cost))}</small></span></label>`}).join(''):'<span class="muted">Agrega líneas de Insumos o Bebidas en Costos.</span>'}</div>`}
+  if(evTab==='compras'){ev.buys=ev.buys||[];const need=c.buyList;const tb=need.reduce((a,x)=>a+x.buy,0),te=need.reduce((a,x)=>a+x.exact,0);
+    h+=`<div class="card stack"><b>Lista de compras del evento</b>${need.length?need.map(l=>{const got=ev.buys.includes(l.id||l.name);const u=l.unit?' '+esc(l.unit):'';
+      const det=l.packs!=null?`Necesitas ${fq(l.qty)}${u}${l.pk.yl<100?` (rinde ${fq(l.pk.yl)}%)`:''} · <b style="color:var(--fg);display:inline">compra ${l.packs} × ${fq(l.pk.pk)}${u}</b> · ${money(l.buy)}${l.left>0.004?` · sobran ${fq(l.left)}${u}`:''}`:l.rec&&!(l.buy>0)?`${fq(l.qty)}${u} · no se compra`:`${fq(l.qty)}${u} · ${money(l.buy)}${l.rec&&l.buy>0?' · <i>sin presentación, ponla en la receta</i>':''}`;
+      return `<label class="task ${got?'done':''}" style="box-shadow:none;padding:6px 0"><input type="checkbox" data-buyev="${esc(l.id||l.name)}" ${got?'checked':''}><span class="t"><b>${esc(l.name)}</b><small class="muted">${det}</small></span></label>`}).join('')
+      +`<div class="kpis"><div class="kpi hl"><small>Total a comprar</small><b class="num">${money(tb)}</b></div><div class="kpi"><small>Lo que usa la receta</small><b class="num">${money(te)}</b></div><div class="kpi"><small>Te sobra en producto</small><b class="num">${money(tb-te)}</b></div></div>`
+      :'<span class="muted">Agrega líneas de Insumos o Bebidas en Costos.</span>'}</div>`}
   B.innerHTML=h+'</div>';
   $('#evAll').onclick=()=>{curEv=null;renderEvents()};
   B.querySelectorAll('[data-et]').forEach(b=>b.onclick=()=>{evTab=b.dataset.et;renderEvents()});
@@ -1300,7 +1320,10 @@ function renderEvents(){
   B.querySelectorAll('[data-rr]').forEach(card=>{const rr=ev.recipes[+card.dataset.rr];
     const rref=()=>{const cc=erCalc(rr);card.querySelectorAll('[data-ro]').forEach(e=>e.textContent=money(cc[e.dataset.ro]));(rr.items||[]).forEach((it,ii)=>{const t=card.querySelector(`[data-it="${ii}"]`);if(t)t.textContent=money(nd(it.qty)*nd(it.uc))});evSyncLines(ev)};
     card.querySelectorAll('[data-rf]').forEach(i=>{i.oninput=()=>{const f=i.dataset.rf;rr[f]=f==='name'?i.value:nd(i.value);sv();rref()};i.onchange=i.oninput});
-    card.querySelectorAll('[data-if]').forEach(i=>{i.oninput=()=>{const it=rr.items[+i.dataset.ii];const f=i.dataset.if;it[f]=f==='name'?i.value:f==='uc'?(i.value.includes('$')?pm(i.value):nd(i.value)):nd(i.value);sv();rref()};i.onchange=i.oninput});
+    card.querySelectorAll('[data-if]').forEach(i=>{i.oninput=()=>{const it=rr.items[+i.dataset.ii];const f=i.dataset.if;
+      if(['pk','pp','yl'].includes(f)){const cur=itPack(it)||{pk:0,pp:0,yl:100};Object.assign(it,{pk:cur.pk,pp:cur.pp,yl:cur.yl});it[f]=i.value.includes('$')?pm(i.value):nd(i.value);if(f==='yl'&&!it.yl)it.yl=100;
+        if(nd(it.pk)>0&&nd(it.pp)>0){it.uc=+(it.pp/(it.pk*(nd(it.yl)||100)/100)).toFixed(4);const u=card.querySelector(`[data-if="uc"][data-ii="${i.dataset.ii}"]`);if(u)u.value=+(+it.uc).toFixed(2)}}
+      else it[f]=f==='name'?i.value:f==='uc'?(i.value.includes('$')?pm(i.value):nd(i.value)):nd(i.value);sv();rref()};i.onchange=i.oninput});
     card.querySelectorAll('[data-irm]').forEach(b=>b.onclick=()=>{rr.items.splice(+b.dataset.irm,1);sv();renderEvents()});
     card.querySelectorAll('[data-iu]').forEach(b=>b.onclick=()=>{const it=rr.items[+b.dataset.iu];pickSheet('Unidad',['g','ml','und','kg','L','oz','porción'],it.unit,u=>{it.unit=u;sv();renderEvents()})});
     const rm=card.querySelector('[data-rrm]');rm.onclick=()=>{if(rm.dataset.sure!=='1'){rm.dataset.sure='1';rm.textContent='?';return}ev.recipes=ev.recipes.filter(x=>x!==rr);ev.lines=(ev.lines||[]).filter(l=>l.recId!==rr.id);sv();renderEvents()};
@@ -1308,7 +1331,7 @@ function renderEvents(){
     const paint=()=>{const q=norm(si.value);const L=allMP().filter(x=>!q||norm(x.name).includes(q)).slice(0,60);const raw=si.value.trim();
       res.innerHTML=(raw?`<button type="button" data-inew="1" class="add-new"><span>Escribir “${esc(raw)}” a mano<small>Pones tú la unidad y el costo</small></span><b class="add-action">+ Añadir</b></button>`:'')+L.map((x,xi)=>`<button type="button" data-ipk="${xi}"><span>${esc(x.name)}<small>${x.kind==='rec'?'Receta':'MP'} · ${esc(x.rname)} · ${x.uc>0?money(x.unit==='ml'||x.unit==='g'?x.uc:x.uc)+'/'+esc(x.unit):'sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`).join('');res.hidden=false;
       const nb=res.querySelector('[data-inew]');if(nb)nb.onclick=()=>{rr.items.push({name:raw,unit:'und',qty:0,uc:0});sv();renderEvents()};
-      res.querySelectorAll('[data-ipk]').forEach(b=>b.onclick=()=>{const x=L[+b.dataset.ipk];rr.items.push({name:x.name,unit:x.unit,qty:0,uc:+x.uc.toFixed(4),src:(x.kind==='rec'?'Receta de ':'MP de ')+x.rname});sv();renderEvents();setTimeout(()=>{const c2=$$('#evBody [data-rr]')[+card.dataset.rr];const q2=c2?.querySelectorAll('[data-if="qty"]');q2?.[q2.length-1]?.focus()},40)})};
+      res.querySelectorAll('[data-ipk]').forEach(b=>b.onclick=()=>{const x=L[+b.dataset.ipk];rr.items.push({name:x.name,unit:x.unit,qty:0,uc:+x.uc.toFixed(4),src:(x.kind==='rec'?'Receta de ':'MP de ')+x.rname,...(x.kind==='mp'&&x.pk>0&&x.pp>0?{pk:x.pk,pp:x.pp,yl:x.yl}:{})});sv();renderEvents();setTimeout(()=>{const c2=$$('#evBody [data-rr]')[+card.dataset.rr];const q2=c2?.querySelectorAll('[data-if="qty"]');q2?.[q2.length-1]?.focus()},40)})};
     si.onfocus=paint;si.oninput=paint;si.onblur=()=>setTimeout(()=>{if(!res.contains(document.activeElement))res.hidden=true},150)});
   const ad=$('#eAdd');if(ad)ad.onclick=()=>{ev.lines.push({id:uid(),name:'',cat:'Insumos',qty:1,cost:0});sv();renderEvents();setTimeout(()=>{const n=$$('#evBody [data-lf="name"]');n[n.length-1]?.focus()},40)};
   B.querySelectorAll('[data-l]').forEach(i=>{const upd=()=>{const l=ev.lines[+i.dataset.l];const f=i.dataset.lf;l[f]=f==='qty'?nd(i.value):f==='cost'?pm(i.value):i.value;sv();refresh()};if(i.tagName==='SELECT')i.onchange=upd;else{i.oninput=upd;i.onchange=upd}});
@@ -1321,7 +1344,7 @@ function renderEvents(){
   const dl=$('#evDel');if(dl)dl.onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Toca otra vez para eliminar';return}S.events.items=S.events.items.filter(x=>x.id!==ev.id);sv();curEv=null;renderEvents()};
 }
 function evRefresh(B,ev){const c=evCalc(ev);const set=(k,v)=>B.querySelectorAll(`[data-o="${k}"]`).forEach(e=>e.textContent=v);
-  ['total','perGuest','sale','profit','base','salePerGuest','sugg','suggPer'].forEach(k=>set(k,money(c[k])));set('margin',pct(c.margin));
+  ['total','perGuest','sale','profit','base','theo','adj','salePerGuest','sugg','suggPer'].forEach(k=>set(k,money(c[k])));set('margin',pct(c.margin));
   (ev.lines||[]).forEach((l,k)=>{const t=nd(l.qty)*nd(l.cost);const a=B.querySelector(`[data-lt="${k}"]`),p=B.querySelector(`[data-lp="${k}"]`);if(a)a.textContent=money(t);if(p)p.textContent=pct(c.base?t/c.base:0)});
   (ev.partners||[]).forEach((p,k)=>{const e=B.querySelector(`[data-pt="${k}"]`);if(e)e.textContent=money(c.profit*nd(p.pct)/100+nd(p.put))});
 }
@@ -1330,7 +1353,11 @@ $('#evExport').onclick=()=>{const ev=curEv;if(!ev||!window.XLSX)return;const c=e
   (ev.lines||[]).forEach(l=>rows.push([l.name,l.cat,nd(l.qty),nd(l.cost),nd(l.qty)*nd(l.cost)]));
   rows.push([],['Costo base','','','',Math.round(c.base)],['Margen de error %','','','',c.err*100],['Costo total','','','',Math.round(c.total)],['Costo por invitado','','','',Math.round(c.perGuest)],['Venta','','','',Math.round(c.sale)],['Utilidad','','','',Math.round(c.profit)],['Margen %','','','',+(c.margin*100).toFixed(1)]);
   if(ev.type==='colab'&&ev.partners?.length){rows.push([],['Socio','% utilidad','Aportó','Le corresponde']);ev.partners.forEach(p=>rows.push([p.name,nd(p.pct),nd(p.put),Math.round(c.profit*nd(p.pct)/100+nd(p.put))]))}
-  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:30},{wch:14},{wch:10},{wch:14},{wch:14}];XLSX.utils.book_append_sheet(wb,ws,'Evento');saveXlsx(wb,`Evento ${ev.name} ${ev.date||today()}.xlsx`)};
+  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:30},{wch:14},{wch:10},{wch:14},{wch:14}];XLSX.utils.book_append_sheet(wb,ws,'Evento');
+  const cr=[['Lista de compras · '+ev.name],[],['Producto','Necesitas','Unidad','Paquetes a comprar','Tamaño paquete','Precio paquete','Total compra','Sobra']];
+  c.buyList.forEach(x=>cr.push([x.name,x.qty,x.unit||'',x.packs??'',x.pk?.pk??'',x.pk?.pp??'',Math.round(x.buy),x.left!=null?+x.left.toFixed(2):'']));
+  cr.push([],['Total a comprar','','','','','',Math.round(c.buyList.reduce((a,x)=>a+x.buy,0))]);
+  const ws2=XLSX.utils.aoa_to_sheet(cr);ws2['!cols']=[{wch:30},{wch:11},{wch:8},{wch:12},{wch:12},{wch:12},{wch:13},{wch:9}];XLSX.utils.book_append_sheet(wb,ws2,'Compras');saveXlsx(wb,`Evento ${ev.name} ${ev.date||today()}.xlsx`)};
 
 function newIngSheet(name,cb){const R=S.r[curR.id];let unit='g';const P=$('#genPane');
   P.innerHTML=`<h2>Nueva materia prima</h2><div class="field"><label for="niName">Nombre</label><input class="in" id="niName" value="${esc(name)}"></div>
@@ -1754,6 +1781,14 @@ async function importSocialExtra1(){const rid=typeof socRid==='function'?socRid(
     const items=[{ing:mp('Yogurt griego','g').id,qty:100},{ing:mp('Fresa','g').id,qty:30},{ing:mp('Arándanos','g').id,qty:20},...(sir?[{ing:sir.id,qty:2,type:'recipe'}]:[]),{ing:mp('Leche condensada','ml').id,qty:15},{ing:mp('Leche','ml').id,qty:75}];
     R.recipes.push({id:uid(),name:'Batido Morado',cat:cat('Batidos'),portions:1,price:0,error:null,target:null,items})}
   R.importX1=true;await save('r_'+rid,R,true)}
+async function makeEvMangoFresa(){if(S.events.mf1||S.events.items.some(e=>/mango.?fresa/i.test(e.name||'')))return;
+  if(db&&db===window.__jbCloud){try{const d=(await db.doc('app/events').get()).data();if(d&&(d.mf1||(d.items||[]).some(e=>/mango.?fresa/i.test(e.name||''))))return}catch(e){return}}
+  const L=allMP();const soc=S.r[typeof socRid==='function'?socRid():'']||null;
+  const mp=(n,u,q,pref)=>{let x=null;if(pref){const i=(pref.ingredients||[]).find(z=>norm(z.name)===norm(n));if(i)x={name:i.name,unit:i.unit,uc:unitCost(i),pk:nd(i.pack),pp:nd(i.price),yl:nd(i.yield||100)||100,rname:'Social'}}
+    if(!x)x=L.find(z=>z.kind==='mp'&&z.k===norm(n));if(!x)return{name:n,unit:u,qty:q,uc:0};return{name:x.name,unit:x.unit,qty:q,uc:+x.uc.toFixed(4),src:'MP de '+x.rname,...(x.pk>0&&x.pp>0?{pk:x.pk,pp:x.pp,yl:x.yl}:{})}};
+  const rr={id:uid(),name:'Mango-Fresa Shake',portions:1,error:0,items:[mp('Mango tomy','g',40),mp('Fresas','g',30),mp('Zumo de limon','ml',20),mp('Azucar Blanca','g',12.5),{name:'Agua',unit:'ml',qty:42.5,uc:0},mp('Hielo','g',200,soc),mp('Vasos y tapas 16oz Darnel (jugos) x24','und',1),mp('Pitillo plastico','und',1)]};
+  const ev={id:uid(),name:'Evento juventudes · Mango-Fresa',date:'',place:'',type:'own',status:'cot',guests:150,notes:'150 mocktails Mango-Fresa Shake. Base licuada lista (mango, fresa, limón, sirope, agua): 145 ml por bebida, shaker con hielo 10 s y al vaso. Meta: mínimo $300.000 de ganancia.',error:5,target:37.5,priceMode:'total',price:800000,partners:[],buys:[],recipes:[rr],lines:[{id:uid(),recId:rr.id,name:rr.name,cat:'Bebidas',qty:150,cost:Math.round(erCalc(rr).per)}]};
+  S.events.items.push(ev);S.events.mf1=true;await save('events',S.events,true)}
 async function makeDesayuno(){const st=S.meta.settings;if(st.desayunoDone||S.meta.restaurants.some(r=>r.id==='desayuno'||norm(r.name)==='desayuno'))return;
   if(db&&db===window.__jbCloud){try{const m=(await db.doc('app/meta').get()).data();if(!m||m.settings?.desayunoDone||(m.restaurants||[]).some(r=>r.id==='desayuno'))return}catch(e){return}}
   const ings=[];for(const r of S.meta.restaurants){for(const i of (S.r[r.id]?.ingredients||[])){const k=norm(i.name);if(!k)continue;const prev=ings.find(x=>norm(x.name)===k);
@@ -1773,7 +1808,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
