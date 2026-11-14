@@ -368,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.3</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.4</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1208,32 +1208,43 @@ $('#bPng').onclick=async()=>{if(dirty)await $('#bSave').onclick();exportBoardPNG
 /* ---------- eventos ---------- */
 const ECAT=['Insumos','Bebidas','Personal','Logística','Alquiler','Otros'];
 let curEv=null,evTab='datos';
-function erCalc(rr){const base=(rr.items||[]).reduce((a,it)=>a+nd(it.qty)*nd(it.uc),0);const err=nd(rr.error??5)/100;const total=base*(1+err);const por=Math.max(nd(rr.portions)||1,1);return{base,err,total,per:total/por,por}}
-function evSyncLines(ev){(ev.lines||[]).forEach(l=>{if(l.recId){const rr=(ev.recipes||[]).find(x=>x.id===l.recId);if(rr){l.cost=Math.round(erCalc(rr).per);l.name=rr.name}}})}
+function evMP(ev){return ev.mp||(ev.mp=[])}
+const evM=(ev,id)=>(ev.mp||[]).find(m=>m.id===id);
+const fuc=v=>v>0&&v<100?'$ '+(+(+v).toFixed(2)).toLocaleString('es-CO'):money(v);
+function itUC(it,ev){const m=ev&&it.ing?evM(ev,it.ing):null;return m?unitCost(m):nd(it.uc)}
+function erCalc(rr,ev){const base=(rr.items||[]).reduce((a,it)=>a+nd(it.qty)*itUC(it,ev),0);const err=nd(rr.error??5)/100;const total=base*(1+err);const por=Math.max(nd(rr.portions)||1,1);return{base,err,total,per:total/por,por}}
+function evSyncLines(ev){(ev.lines||[]).forEach(l=>{if(l.recId){const rr=(ev.recipes||[]).find(x=>x.id===l.recId);if(rr){l.cost=Math.round(erCalc(rr,ev).per);l.name=rr.name}}})}
 function allMP(){const out=[];const seen=new Set();for(const r of S.meta.restaurants){const R=S.r[r.id];if(!R)continue;for(const i of R.ingredients||[]){const k=norm(i.name);if(!k)continue;const uc=unitCost(i);const pkI={pk:nd(i.pack),pp:nd(i.price),yl:nd(i.yield||100)||100};const prev=out.find(x=>x.k===k);if(prev){if(!(prev.uc>0)&&uc>0)Object.assign(prev,{uc,unit:i.unit,rname:r.name},pkI);continue}out.push({k,name:i.name,unit:i.unit,uc,rname:r.name,kind:'mp',...pkI})}
   for(const x of R.recipes||[]){out.push({k:'rec:'+r.id+x.id,name:x.name,unit:'porción',uc:recipeCostPerPortion(x,R),rname:r.name,kind:'rec'})}}return out}
 let _mpc=null,_mpt=0;function allMPc(){if(!_mpc||Date.now()-_mpt>3000){_mpc=allMP();_mpt=Date.now()}return _mpc}
 function itPack(it){if(nd(it.pk)>0)return{pk:nd(it.pk),pp:nd(it.pp),yl:nd(it.yl||100)||100};const k=norm(it.name);if(!k||String(it.src||'').startsWith('Receta'))return null;
   const m=allMPc().find(x=>x.kind==='mp'&&x.k===k&&x.unit===it.unit&&x.pk>0&&x.pp>0);return m?{pk:m.pk,pp:m.pp,yl:m.yl||100}:null}
 const fq=v=>(+(+v).toFixed(2)).toLocaleString('es-CO');
-function evBuy(ev){const need=[];
-  for(const l of ev.lines||[]){const rr=l.recId&&(ev.recipes||[]).find(x=>x.id===l.recId);
-    if(!rr){if(['Insumos','Bebidas'].includes(l.cat)&&l.name)need.push({id:l.id||l.name,name:l.name,qty:nd(l.qty),unit:'',cost:nd(l.cost),line:1});continue}
-    const f=nd(l.qty)/Math.max(nd(rr.portions)||1,1);
-    for(const it of rr.items||[]){if(!it.name)continue;const key='rec:'+norm(it.name);let x=need.find(n=>n.id===key);
-      if(!x){const pk=itPack(it);x={id:key,name:it.name,qty:0,cost:nd(it.uc)||(pk&&pk.pk>0?pk.pp/(pk.pk*pk.yl/100):0),unit:it.unit,pk,rec:1};need.push(x)}x.qty=+(x.qty+nd(it.qty)*f).toFixed(2)}}
-  for(const x of need){x.exact=x.qty*x.cost;if(x.line||!x.pk||!(x.pk.pp>0)){x.buy=x.exact;continue}
-    const gross=x.qty/((x.pk.yl||100)/100);x.packs=x.qty>0?Math.ceil(gross/x.pk.pk-1e-6):0;x.buy=x.packs*x.pk.pp;x.left=Math.max(x.packs*x.pk.pk-gross,0)}
-  return need}
-function evCalc(ev){evSyncLines(ev);
+function evFix(ev){let ch=false;const M=evMP(ev);
+  for(const rr of ev.recipes||[])for(const it of rr.items||[]){if(it.ing||!it.name)continue;const k=norm(it.name);let m=M.find(x=>norm(x.name)===k&&x.unit===(it.unit||'und'));
+    if(!m){let pk;if(nd(it.pk)>0&&nd(it.pp)>0)pk={pack:nd(it.pk),price:nd(it.pp),yield:nd(it.yl||100)||100};else{const g=itPack(it);pk=g&&g.pp>0?{pack:g.pk,price:g.pp,yield:g.yl}:{pack:1,price:+nd(it.uc).toFixed(4),yield:100}}
+      m={id:uid(),name:it.name,unit:it.unit||'und',...pk,src:it.src?String(it.src).replace(/^(MP|Receta) de /,''):''};M.push(m)}
+    it.ing=m.id;ch=true}
+  if(ch&&!ev.mpv){ev.mpv=1;if(/mango.?fresa/i.test(ev.name||''))(ev.recipes||[]).forEach(r=>{if(!nd(r.error))r.error=5})}
+  return ch}
+function evBuy(ev){const need=new Map();
+  for(const l of ev.lines||[]){const rr=l.recId&&(ev.recipes||[]).find(x=>x.id===l.recId);if(!rr)continue;const f=nd(l.qty)/Math.max(nd(rr.portions)||1,1);const er=nd(rr.error??5)/100;
+    for(const it of rr.items||[]){const m=it.ing&&evM(ev,it.ing);if(!m)continue;const x=need.get(m.id)||{m,qty:0,qe:0};x.qty+=nd(it.qty)*f;x.qe+=nd(it.qty)*f*(1+er);need.set(m.id,x)}}
+  const out=[];for(const x of need.values()){if(!(x.qty>0))continue;const m=x.m;const yl=(nd(m.yield)||100)/100;const pack=nd(m.pack),price=nd(m.price);const gross=x.qe/yl;
+    const o={id:'mp:'+m.id,name:m.name,unit:m.unit,qty:x.qty,qe:x.qe,gross,yl:yl*100,pack,price,exact:x.qty*unitCost(m),rec:1};
+    if(pack>0&&price>0){o.packs=x.qe>0?Math.ceil(gross/pack-1e-6):0;o.buy=o.packs*price;o.left=Math.max(o.packs*pack-gross,0)}else{o.buy=0;o.noprice=1}
+    out.push(o)}
+  for(const l of ev.lines||[]){if(l.recId&&(ev.recipes||[]).some(r=>r.id===l.recId))continue;if(['Insumos','Bebidas'].includes(l.cat)&&l.name)out.push({id:l.id||l.name,name:l.name,qty:nd(l.qty),unit:'',exact:nd(l.qty)*nd(l.cost),buy:nd(l.qty)*nd(l.cost),line:1})}
+  return out}
+function evCalc(ev){evFix(ev);evSyncLines(ev);
   const lines=ev.lines||[];const isRec=l=>l.recId&&(ev.recipes||[]).some(r=>r.id===l.recId);const buyList=evBuy(ev);
-  const theoRec=lines.filter(isRec).reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0),realRec=buyList.filter(x=>x.rec).reduce((a,x)=>a+x.buy,0);
-  const theo=lines.reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0);const base=theo-theoRec+realRec;const adj=base-theo;const sc=theoRec>0?realRec/theoRec:1;
-  const err=nd(ev.error)/100;const total=base*(1+err);
+  const recT=lines.filter(isRec).reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0),buyRec=buyList.filter(x=>x.rec).reduce((a,x)=>a+x.buy,0);
+  const other=lines.filter(l=>!isRec(l)).reduce((a,l)=>a+nd(l.qty)*nd(l.cost),0);const hasRec=lines.some(isRec);
+  const err=nd(ev.error)/100;const base=other+(hasRec?buyRec:0);const total=other*(1+err)+(hasRec?buyRec:0);const theo=other+recT;const adj=base-theo;const sc=recT>0?buyRec/recT:1;
   const guests=Math.max(nd(ev.guests),0);const sale=ev.priceMode==='person'?nd(ev.price)*guests:nd(ev.price);
   const profit=sale-total;const margin=sale>0?profit/sale:0;const target=nd(ev.target)/100;const sugg=target<1?total/(1-target):0;
   const byCat=ECAT.map(c=>({c,v:lines.filter(l=>l.cat===c).reduce((a,l)=>a+nd(l.qty)*nd(l.cost)*(isRec(l)?sc:1),0)})).filter(x=>x.v>0);
-  return{base,theo,adj,buyList,err,total,guests,sale,profit,margin,perGuest:guests?total/guests:0,salePerGuest:guests?sale/guests:0,sugg,suggPer:guests?sugg/guests:0,byCat};
+  return{base,theo,adj,buyList,buyRec,hasRec,err,total,guests,sale,profit,margin,perGuest:guests?total/guests:0,salePerGuest:guests?sale/guests:0,sugg,suggPer:guests?sugg/guests:0,byCat};
 }
 const evR=ev=>ev.rids||(ev.rid?[ev.rid]:[]);
 const evJB=ev=>ev.jb??(evR(ev).length===0);
@@ -1242,7 +1253,7 @@ function evOwners(ev){const ids=evR(ev);const pill=(id,name,bg,on)=>`<button typ
  return pill('jb','Juan Beltran','#173C32',evJB(ev))+S.meta.restaurants.map(r=>pill(r.id,r.name,tone(r),ids.includes(r.id))).join('')}
 const ST={cot:'Cotización',conf:'Confirmado',done:'Realizado',lost:'No se hizo'};
 function renderEvents(){
-  const B=$('#evBody');$('#evExport').hidden=!curEv;
+  const B=$('#evBody');$('#evExport').hidden=!curEv;{let fx=false;S.events.items.forEach(e=>{if(evFix(e))fx=true});if(fx)save('events',S.events)}
   if(!curEv){$('#evTitle').textContent='Eventos';
     const L=[...S.events.items].sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
     B.innerHTML=`<div class="stack wrapmax"><div class="rowx"><span class="muted">Eventos propios y colaboraciones, con sus costos, precio y reparto.</span><span class="sp"></span><button class="btn" id="evNew" style="background:#173C32;color:#F3EBDD">+ Nuevo evento</button></div>
@@ -1251,8 +1262,8 @@ function renderEvents(){
     B.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{curEv=S.events.items.find(e=>e.id===b.dataset.ev);evTab='datos';blip(800,.03);renderEvents()});return;
   }
   const ev=curEv,c=evCalc(ev);$('#evTitle').textContent=ev.name;const sv=()=>save('events',S.events);
-  const tabs=['datos','recetas','costos','precio',...(ev.type==='colab'?['socios']:[]),'compras'];if(!tabs.includes(evTab))evTab='datos';
-  const TN={datos:'Datos',recetas:'Recetas',costos:'Costos',precio:'Precio y margen',socios:'Socios',compras:'Compras del evento'};
+  const tabs=['datos','mp','recetas','costos','precio',...(ev.type==='colab'?['socios']:[]),'compras'];if(!tabs.includes(evTab))evTab='datos';
+  const TN={datos:'Datos',mp:'MP del evento',recetas:'Recetas',costos:'Costos',precio:'Precio y margen',socios:'Socios',compras:'Compras del evento'};
   let h=`<div class="stack wrapmax"><div class="rowx"><button class="btn sm ghost" id="evAll">← Todos los eventos</button></div><div class="tabs">${tabs.map(t=>`<button class="tab" data-et="${t}" aria-selected="${t===evTab}">${TN[t]}</button>`).join('')}</div>
    <div class="kpis"><div class="kpi"><small>Costo total</small><b class="num" data-o="total">${money(c.total)}</b></div><div class="kpi"><small>Costo por invitado</small><b class="num" data-o="perGuest">${money(c.perGuest)}</b></div><div class="kpi"><small>Venta</small><b class="num" data-o="sale">${money(c.sale)}</b></div><div class="kpi hl"><small>Utilidad · margen</small><b class="num" data-o="profit">${money(c.profit)}</b> <small data-o="margin">${pct(c.margin)}</small></div></div>`;
   if(evTab==='datos')h+=`<div class="card stack"><div class="grid2"><div class="field span2"><label for="eName">Nombre del evento</label><input class="in" id="eName" data-e="name" value="${esc(ev.name)}"></div>
@@ -1262,25 +1273,33 @@ function renderEvents(){
     <div class="field"><label for="eGuests">Invitados</label><input class="in num" id="eGuests" data-e="guests" data-num="1" inputmode="numeric" value="${ev.guests||''}"></div><div class="field span2"><span class="lab">Para quién es</span><div class="rowx" style="gap:8px">${evOwners(ev)}</div></div>
     <div class="field span2"><label for="eNotes">Notas</label><textarea class="in" id="eNotes" data-e="notes">${esc(ev.notes)}</textarea></div></div>
     <div class="rowx"><span class="sp"></span><button class="btn danger sm" id="evDel">Eliminar evento</button></div></div>`;
+  if(evTab==='mp'){const M=evMP(ev);
+    h+=`<div class="rowx"><h2 class="sec">MP del evento</h2><span class="sp"></span><button class="btn" id="emNew" style="background:#173C32;color:#F3EBDD">+ MP nueva</button></div>
+     <span class="muted small">La materia prima de este evento: en qué presentación la compras, cuánto vale y cuánto rinde. Puedes traerla de tus otras tarjetas.</span>
+     <div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" id="emSearch" type="search" placeholder="Traer MP de tus restaurantes…" autocomplete="off" style="padding-left:42px"><div class="add-results" id="emRes" hidden></div></div>
+     <div class="stack" style="gap:8px">${M.length?M.map((m,mi)=>{const used=(ev.recipes||[]).some(r=>(r.items||[]).some(it=>it.ing===m.id));const u=esc(m.unit||'und');return `<div class="eline" data-mi="${mi}"><div class="rowx" style="flex-wrap:nowrap"><input class="in" data-mf="name" value="${esc(m.name)}" placeholder="Nombre, ej: Limón" style="flex:1;font-weight:700"><button class="x" data-mrm="${mi}" aria-label="Quitar">✕</button></div>
+      <div class="egrid"><div class="field"><label>Unidad</label><button type="button" class="ubtn" data-mu="${mi}">${u}</button></div><div class="field"><label>Presentación (${u})</label><input class="in num" data-mf="pack" inputmode="decimal" value="${nd(m.pack)||''}" placeholder="ej: 250"></div><div class="field"><label>Precio presentación</label><input class="in num" data-mf="price" inputmode="decimal" value="${nd(m.price)?Math.round(nd(m.price)*100)/100:''}" placeholder="$"></div></div>
+      <div class="egrid"><div class="field"><label>Rinde %</label><input class="in num" data-mf="yield" inputmode="decimal" value="${nd(m.yield)||100}"></div><div class="field" style="grid-column:span 2"><label>Costo por ${u}</label><div class="in num" style="opacity:.85" data-muc>${fuc(unitCost(m))}</div></div></div>
+      <div class="rowx small"><span class="muted">${m.src?'Traída de '+esc(m.src):'Escrita a mano'}${used?' · se usa en recetas':''}</span></div></div>`}).join(''):'<div class="empty card">Agrega la MP que vas a usar en las recetas del evento.</div>'}</div>`}
   if(evTab==='recetas'){ev.recipes=ev.recipes||[];
     h+=`<div class="rowx"><h2 class="sec">Recetas del evento</h2><span class="sp"></span><button class="btn" id="erNew" style="background:#173C32;color:#F3EBDD">+ Receta</button></div>
-     <span class="muted small">Sácale el costo a lo que vas a preparar solo para este evento. Luego en Costos la agregas con “+ Receta”.</span>
-     ${ev.recipes.length?ev.recipes.map((rr,ri)=>{const cc=erCalc(rr);return `<div class="card stack" data-rr="${ri}">
-      <div class="rowx" style="flex-wrap:nowrap"><input class="in" data-rf="name" value="${esc(rr.name)}" placeholder="Nombre, ej: Pizza de jamón" style="flex:1;font-weight:800"><button class="x" data-rrm="${ri}" aria-label="Eliminar receta">✕</button></div>
+     <span class="muted small">Las recetas usan solo la MP del evento. Luego en Costos la agregas con “+ Receta”.</span>
+     ${ev.recipes.length?ev.recipes.map((rr,ri)=>{const cc=erCalc(rr,ev);return `<div class="card stack" data-rr="${ri}">
+      <div class="rowx" style="flex-wrap:nowrap"><input class="in" data-rf="name" value="${esc(rr.name)}" placeholder="Nombre, ej: Mango-Fresa" style="flex:1;font-weight:800"><button class="x" data-rrm="${ri}" aria-label="Eliminar receta">✕</button></div>
       <div class="grid2"><div class="field"><label>Porciones que rinde</label><input class="in num" data-rf="portions" inputmode="decimal" value="${rr.portions||1}"></div><div class="field"><label>Margen de error %</label><input class="in num" data-rf="error" inputmode="decimal" value="${rr.error??5}"></div></div>
-      <div class="stack" style="gap:6px">${(rr.items||[]).map((it,ii)=>`<div class="eline" style="padding:10px"><div class="rowx" style="flex-wrap:nowrap"><input class="in" data-if="name" data-ii="${ii}" value="${esc(it.name)}" placeholder="Ingrediente" style="flex:1;font-weight:700"><button class="x" data-irm="${ii}" aria-label="Quitar">✕</button></div>
-        <div class="egrid"><div class="field"><label>Cantidad</label><input class="in num" data-if="qty" data-ii="${ii}" inputmode="decimal" value="${it.qty||''}" placeholder="0"></div><div class="field"><label>Unidad</label><button type="button" class="ubtn" data-iu="${ii}">${esc(it.unit||'und')}</button></div><div class="field"><label>Costo por unidad ($)</label><input class="in num" data-if="uc" data-ii="${ii}" inputmode="decimal" value="${it.uc?+(+it.uc).toFixed(2):''}" placeholder="$"></div></div>
-        ${(()=>{const pk=itPack(it)||{};return `<div class="egrid"><div class="field"><label>Lo venden en (${esc(it.unit||'und')})</label><input class="in num" data-if="pk" data-ii="${ii}" inputmode="decimal" value="${pk.pk?+(+pk.pk).toFixed(2):''}" placeholder="ej: 500"></div><div class="field"><label>Rinde %</label><input class="in num" data-if="yl" data-ii="${ii}" inputmode="decimal" value="${pk.pk?+(+pk.yl).toFixed(1):''}" placeholder="100"></div><div class="field"><label>Precio del paquete</label><input class="in num" data-if="pp" data-ii="${ii}" inputmode="decimal" value="${pk.pp?Math.round(pk.pp):''}" placeholder="$"></div></div>`})()}
-        <div class="rowx small"><span class="muted">${it.src?esc(it.src):'Escrito a mano'}</span><span class="sp"></span><b class="num" data-it="${ii}">${money(nd(it.qty)*nd(it.uc))}</b></div></div>`).join('')}</div>
-      <div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" data-isearch type="search" placeholder="Añadir ingrediente: busca en la MP o recetas de tus restaurantes…" autocomplete="off" style="padding-left:42px"><div class="add-results" data-ires hidden></div></div>
+      <div class="stack" style="gap:6px">${(rr.items||[]).map((it,ii)=>{const m=it.ing&&evM(ev,it.ing);const uc=itUC(it,ev);const u=esc(m?m.unit:(it.unit||'und'));return `<div class="eline" style="padding:10px"><div class="rowx" style="flex-wrap:nowrap"><b style="flex:1">${esc(m?m.name:(it.name||'MP borrada'))}</b><button class="x" data-irm="${ii}" aria-label="Quitar">✕</button></div>
+        <div class="egrid"><div class="field"><label>Cantidad (${u})</label><input class="in num" data-if="qty" data-ii="${ii}" inputmode="decimal" value="${it.qty||''}" placeholder="0"></div><div class="field"><label>Costo por ${u}</label><div class="in num" style="opacity:.85">${fuc(uc)}</div></div><div class="field"><label>Costo</label><div class="in num" style="opacity:.85" data-it="${ii}">${money(nd(it.qty)*uc)}</div></div></div>
+        ${m?'':'<span class="small" style="color:var(--bad)">Esta MP ya no está en la MP del evento</span>'}</div>`}).join('')}</div>
+      <div class="add-picker"><span class="add-search-icon" aria-hidden="true">🔍</span><input class="in" data-isearch type="search" placeholder="Añadir ingrediente de la MP del evento…" autocomplete="off" style="padding-left:42px"><div class="add-results" data-ires hidden></div></div>
       <div class="kpis"><div class="kpi"><small>Costo ingredientes</small><b class="num" data-ro="base">${money(cc.base)}</b></div><div class="kpi"><small>+ Margen de error</small><b class="num" data-ro="total">${money(cc.total)}</b></div><div class="kpi hl"><small>Costo por porción</small><b class="num" data-ro="per">${money(cc.per)}</b></div></div>
       </div>`}).join(''):'<div class="empty card">Crea la primera receta del evento.</div>'}`}
   if(evTab==='costos')h+=`
+   ${(()=>{const R=c.buyList.filter(x=>x.rec);if(!R.length)return '';return `<div class="card stack"><b>Cuánto comprar para las recetas</b><span class="muted small">Según la presentación de cada MP del evento, con el margen de error de cada receta.</span>${R.map(x=>{const u=esc(x.unit||'');return `<div class="rowx" style="flex-wrap:nowrap;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid rgba(0,0,0,.08)"><span style="flex:1"><b>${esc(x.name)}</b><br><small class="muted">Usas ${fq(x.qty)} ${u} · con margen ${fq(x.qe)} ${u}${x.yl<100?` · rinde ${fq(x.yl)}% → ${fq(x.gross)} ${u}`:''}${x.left>0.004?` · sobran ${fq(x.left)} ${u}`:''}</small></span><span style="text-align:right;white-space:nowrap">${x.noprice?'<small class="muted">Sin precio en MP</small>':`<b>${x.packs} × ${fq(x.pack)} ${u}</b><br><small class="num">${money(x.buy)}</small>`}</span></div>`}).join('')}<div class="rowx" style="border-top:1px solid rgba(0,0,0,.08);padding-top:8px"><b>Total a comprar</b><span class="sp"></span><b class="num">${money(c.buyRec)}</b></div></div>`})()}
    <div class="rowx"><h2 class="sec">Costos</h2><span class="sp"></span>${(ev.recipes||[]).length?'<button class="btn ghost" id="eAddRec">+ Receta</button>':''}<button class="btn" id="eAdd">+ Línea</button></div>
     <div class="stack" style="gap:8px">${(ev.lines||[]).map((l,k)=>{const t=nd(l.qty)*nd(l.cost);return `<div class="eline"><div class="rowx" style="flex-wrap:nowrap"><input class="in" data-l="${k}" data-lf="name" value="${esc(l.name)}" placeholder="Concepto, ej: Ron añejo" style="flex:1;font-weight:700" ${l.recId?'readonly':''}><button class="x" data-lrm="${k}" aria-label="Quitar">✕</button></div>
      <div class="egrid"><div class="field"><label>Tipo</label><button type="button" class="in" data-lcat="${k}" style="text-align:left">${esc(l.cat)} ▾</button></div><div class="field"><label>Cantidad</label><input class="in num" data-l="${k}" data-lf="qty" inputmode="decimal" value="${l.qty}"></div><div class="field"><label>${l.recId?'Costo por porción':'Costo unitario'}</label>${l.recId?`<div class="in num" style="opacity:.85">${money(l.cost)}</div>`:`<input class="in num" data-l="${k}" data-lf="cost" inputmode="numeric" value="${l.cost||''}" placeholder="$">`}</div></div>${l.recId?'<span class="muted small">🍳 Receta del evento · el costo se actualiza solo</span>':''}
      <div class="rowx small"><span class="muted">Total línea</span><b class="num" data-lt="${k}">${money(t)}</b><span class="sp"></span><span class="muted num" data-lp="${k}">${pct(c.base?t/c.base:0)}</span></div></div>`}).join('')||'<div class="empty card">Agrega la primera línea de costo.</div>'}
-     ${Math.abs(c.adj)>=1?`<div class="card stack" style="padding:12px 14px;gap:4px"><div class="rowx"><span>Costo según receta</span><span class="sp"></span><span class="num" data-o="theo">${money(c.theo)}</span></div><div class="rowx"><span>+ Ajuste por comprar paquetes completos</span><span class="sp"></span><b class="num" data-o="adj">${money(c.adj)}</b></div><span class="muted small">Se compra lo que venden (ej: 500 g de fresa aunque uses 400 g). Mira el detalle en “Compras del evento”.</span></div>`:''}
+     ${Math.abs(c.adj)>=1?`<div class="card stack" style="padding:12px 14px;gap:4px"><div class="rowx"><span>Costo según receta</span><span class="sp"></span><span class="num" data-o="theo">${money(c.theo)}</span></div><div class="rowx"><span>+ Ajuste por paquetes completos y margen</span><span class="sp"></span><b class="num" data-o="adj">${money(c.adj)}</b></div><span class="muted small">Se compra lo que venden (ej: 500 g de fresa aunque uses 400 g). Mira el detalle en “Compras del evento”.</span></div>`:''}
      <div class="rowx card" style="padding:12px 14px"><b>Total costos${Math.abs(c.adj)>=1?' (lo que vas a comprar)':''}</b><span class="sp"></span><b class="num" data-o="base">${money(c.base)}</b></div>
      <button class="btn ghost" id="eAdd2">+ Agregar otra línea</button></div>
     ${c.byCat.length?`<div class="legend">${c.byCat.map(x=>`<span class="chip" style="background:var(--grey)">${x.c}: ${money(x.v)}</span>`).join('')}</div>`:''}
@@ -1288,7 +1307,7 @@ function renderEvents(){
   if(evTab==='precio')h+=`<div class="card stack"><div class="grid2">
     <div class="field span2"><span class="lab">Cómo cobras</span><div class="seg">${[['person','Por invitado'],['total','Valor total']].map(([k,v])=>`<button type="button" data-set="priceMode" data-v="${k}" aria-pressed="${ev.priceMode===k}">${v}</button>`).join('')}</div></div>
     <div class="field"><label for="ePr">${ev.priceMode==='person'?'Precio por invitado':'Precio total'}</label><input class="in num" id="ePr" data-e="price" data-num="money" inputmode="numeric" value="${ev.price||''}"></div>
-    <div class="field"><label for="eEr">Margen de error %</label><input class="in num" id="eEr" data-e="error" data-num="1" inputmode="decimal" value="${ev.error}"></div><div class="field"><label for="eTg">Margen objetivo %</label><input class="in num" id="eTg" data-e="target" data-num="1" inputmode="decimal" value="${ev.target}"></div></div>
+    <div class="field"><label for="eEr">${c.hasRec?'Margen de error % (otros costos)':'Margen de error %'}</label><input class="in num" id="eEr" data-e="error" data-num="1" inputmode="decimal" value="${ev.error}"></div><div class="field"><label for="eTg">Margen objetivo %</label><input class="in num" id="eTg" data-e="target" data-num="1" inputmode="decimal" value="${ev.target}"></div></div>
     <div class="kpis"><div class="kpi"><small>Costo + margen de error</small><b class="num" data-o="total">${money(c.total)}</b></div><div class="kpi"><small>Venta por invitado</small><b class="num" data-o="salePerGuest">${money(c.salePerGuest)}</b></div><div class="kpi"><small>Precio sugerido total</small><b class="num" data-o="sugg">${money(c.sugg)}</b></div><div class="kpi"><small>Sugerido por invitado</small><b class="num" data-o="suggPer">${money(c.suggPer)}</b></div></div>
     <div class="rowx"><button class="btn ghost sm" id="eUseSug">Usar precio sugerido</button></div></div>`;
   if(evTab==='socios'){const ps=ev.partners||[];const tp=ps.reduce((a,p)=>a+nd(p.pct),0);
@@ -1298,11 +1317,11 @@ function renderEvents(){
      </tbody></table></div><datalist id="pList"><option value="Juan Beltran">${S.meta.restaurants.map(r=>`<option value="${esc(r.name)}">`).join('')}</datalist>
      <div class="rowx"><span class="small ${Math.abs(tp-100)<0.01?'muted':''}" style="${Math.abs(tp-100)<0.01?'':'color:var(--bad)'}">Suma: ${tp}%${Math.abs(tp-100)<0.01?'':' (debe dar 100%)'}</span><span class="sp"></span><button class="btn sm" id="pAdd">+ Socio</button></div></div>`}
   if(evTab==='compras'){ev.buys=ev.buys||[];const need=c.buyList;const tb=need.reduce((a,x)=>a+x.buy,0),te=need.reduce((a,x)=>a+x.exact,0);
-    h+=`<div class="card stack"><b>Lista de compras del evento</b>${need.length?need.map(l=>{const got=ev.buys.includes(l.id||l.name);const u=l.unit?' '+esc(l.unit):'';
-      const det=l.packs!=null?`Necesitas ${fq(l.qty)}${u}${l.pk.yl<100?` (rinde ${fq(l.pk.yl)}%)`:''} · <b style="color:var(--fg);display:inline">compra ${l.packs} × ${fq(l.pk.pk)}${u}</b> · ${money(l.buy)}${l.left>0.004?` · sobran ${fq(l.left)}${u}`:''}`:l.rec&&!(l.buy>0)?`${fq(l.qty)}${u} · no se compra`:`${fq(l.qty)}${u} · ${money(l.buy)}${l.rec&&l.buy>0?' · <i>sin presentación, ponla en la receta</i>':''}`;
-      return `<label class="task ${got?'done':''}" style="box-shadow:none;padding:6px 0"><input type="checkbox" data-buyev="${esc(l.id||l.name)}" ${got?'checked':''}><span class="t"><b>${esc(l.name)}</b><small class="muted">${det}</small></span></label>`}).join('')
-      +`<div class="kpis"><div class="kpi hl"><small>Total a comprar</small><b class="num">${money(tb)}</b></div><div class="kpi"><small>Lo que usa la receta</small><b class="num">${money(te)}</b></div><div class="kpi"><small>Te sobra en producto</small><b class="num">${money(tb-te)}</b></div></div>`
-      :'<span class="muted">Agrega líneas de Insumos o Bebidas en Costos.</span>'}</div>`}
+    h+=`<div class="card stack"><b>Lista de compras del evento</b>${need.length?need.map(l=>{const got=ev.buys.includes(l.id)||ev.buys.includes('rec:'+norm(l.name));const u=l.unit?' '+esc(l.unit):'';
+      const det=l.rec?(l.noprice?`Usas ${fq(l.qe)}${u} con margen · sin precio en MP`:`<b style="color:var(--fg);display:inline">Compra ${l.packs} × ${fq(l.pack)}${u}</b> · ${money(l.buy)} · usas ${fq(l.qe)}${u} con margen${l.left>0.004?` · sobran ${fq(l.left)}${u}`:''}`):`${fq(l.qty)} · ${money(l.buy)}`;
+      return `<label class="task ${got?'done':''}" style="box-shadow:none;padding:6px 0"><input type="checkbox" data-buyev="${esc(l.id)}" ${got?'checked':''}><span class="t"><b>${esc(l.name)}</b><small class="muted">${det}</small></span></label>`}).join('')
+      +`<div class="kpis"><div class="kpi hl"><small>Total a comprar</small><b class="num">${money(tb)}</b></div><div class="kpi"><small>Lo que usan las recetas</small><b class="num">${money(te)}</b></div><div class="kpi"><small>Margen + sobrante</small><b class="num">${money(tb-te)}</b></div></div>`
+      :'<span class="muted">Agrega recetas o líneas de Insumos y Bebidas en Costos.</span>'}</div>`}
   B.innerHTML=h+'</div>';
   $('#evAll').onclick=()=>{curEv=null;renderEvents()};
   B.querySelectorAll('[data-et]').forEach(b=>b.onclick=()=>{evTab=b.dataset.et;renderEvents()});
@@ -1314,25 +1333,30 @@ function renderEvents(){
     else{i.oninput=()=>{ev[f]=val();sv();refresh();if(f==='name')$('#evTitle').textContent=ev.name||'Evento'};i.onchange=i.oninput}});
   B.querySelectorAll('[data-own]').forEach(b=>b.onclick=()=>{const id=b.dataset.own;let ids=evR(ev).slice();let jb=evJB(ev);if(id==='jb')jb=!jb;else ids=ids.includes(id)?ids.filter(x=>x!==id):[...ids,id];if(!jb&&!ids.length)jb=true;ev.jb=jb;ev.rids=ids;delete ev.rid;sv();renderEvents()});
   const ad2=$('#eAdd2');if(ad2)ad2.onclick=()=>$('#eAdd').click();
-  const ar=$('#eAddRec');if(ar)ar.onclick=()=>{const L=ev.recipes||[];const P=$('#genPane');P.innerHTML=`<h2>Agregar receta del evento</h2><div class="stack" style="gap:8px">${L.map(rr=>`<button class="btn ghost" data-pkr="${rr.id}" style="justify-content:space-between"><span>${esc(rr.name||'Receta sin nombre')}</span><b class="num">${money(erCalc(rr).per)}/porción</b></button>`).join('')}</div><button class="btn ghost" id="pkrX">Cancelar</button>`;
-    P.querySelectorAll('[data-pkr]').forEach(b=>b.onclick=()=>{const rr=L.find(x=>x.id===b.dataset.pkr);ev.lines.push({id:uid(),recId:rr.id,name:rr.name,cat:'Insumos',qty:Math.max(nd(ev.guests),1),cost:Math.round(erCalc(rr).per)});$('#genSheet').hidden=true;sv();renderEvents()});$('#pkrX').onclick=()=>$('#genSheet').hidden=true;$('#genSheet').hidden=false};
+  const ar=$('#eAddRec');if(ar)ar.onclick=()=>{const L=ev.recipes||[];const P=$('#genPane');P.innerHTML=`<h2>Agregar receta del evento</h2><div class="stack" style="gap:8px">${L.map(rr=>`<button class="btn ghost" data-pkr="${rr.id}" style="justify-content:space-between"><span>${esc(rr.name||'Receta sin nombre')}</span><b class="num">${money(erCalc(rr,ev).per)}/porción</b></button>`).join('')}</div><button class="btn ghost" id="pkrX">Cancelar</button>`;
+    P.querySelectorAll('[data-pkr]').forEach(b=>b.onclick=()=>{const rr=L.find(x=>x.id===b.dataset.pkr);ev.lines.push({id:uid(),recId:rr.id,name:rr.name,cat:'Insumos',qty:Math.max(nd(ev.guests),1),cost:Math.round(erCalc(rr,ev).per)});$('#genSheet').hidden=true;sv();renderEvents()});$('#pkrX').onclick=()=>$('#genSheet').hidden=true;$('#genSheet').hidden=false};
   const en=$('#erNew');if(en)en.onclick=()=>{ev.recipes=ev.recipes||[];ev.recipes.push({id:uid(),name:'',portions:1,error:5,items:[]});sv();renderEvents();setTimeout(()=>{const n=$$('#evBody [data-rf="name"]');n[n.length-1]?.focus()},40)};
   B.querySelectorAll('[data-rr]').forEach(card=>{const rr=ev.recipes[+card.dataset.rr];
-    const rref=()=>{const cc=erCalc(rr);card.querySelectorAll('[data-ro]').forEach(e=>e.textContent=money(cc[e.dataset.ro]));(rr.items||[]).forEach((it,ii)=>{const t=card.querySelector(`[data-it="${ii}"]`);if(t)t.textContent=money(nd(it.qty)*nd(it.uc))});evSyncLines(ev)};
+    const rref=()=>{const cc=erCalc(rr,ev);card.querySelectorAll('[data-ro]').forEach(e=>e.textContent=money(cc[e.dataset.ro]));(rr.items||[]).forEach((it,ii)=>{const t=card.querySelector(`[data-it="${ii}"]`);if(t)t.textContent=money(nd(it.qty)*itUC(it,ev))});evSyncLines(ev)};
     card.querySelectorAll('[data-rf]').forEach(i=>{i.oninput=()=>{const f=i.dataset.rf;rr[f]=f==='name'?i.value:nd(i.value);sv();rref()};i.onchange=i.oninput});
-    card.querySelectorAll('[data-if]').forEach(i=>{i.oninput=()=>{const it=rr.items[+i.dataset.ii];const f=i.dataset.if;
-      if(['pk','pp','yl'].includes(f)){const cur=itPack(it)||{pk:0,pp:0,yl:100};Object.assign(it,{pk:cur.pk,pp:cur.pp,yl:cur.yl});it[f]=i.value.includes('$')?pm(i.value):nd(i.value);if(f==='yl'&&!it.yl)it.yl=100;
-        if(nd(it.pk)>0&&nd(it.pp)>0){it.uc=+(it.pp/(it.pk*(nd(it.yl)||100)/100)).toFixed(4);const u=card.querySelector(`[data-if="uc"][data-ii="${i.dataset.ii}"]`);if(u)u.value=+(+it.uc).toFixed(2)}}
-      else it[f]=f==='name'?i.value:f==='uc'?(i.value.includes('$')?pm(i.value):nd(i.value)):nd(i.value);sv();rref()};i.onchange=i.oninput});
+    card.querySelectorAll('[data-if]').forEach(i=>{i.oninput=()=>{const it=rr.items[+i.dataset.ii];it.qty=nd(i.value);sv();rref()};i.onchange=i.oninput});
     card.querySelectorAll('[data-irm]').forEach(b=>b.onclick=()=>{rr.items.splice(+b.dataset.irm,1);sv();renderEvents()});
-    card.querySelectorAll('[data-iu]').forEach(b=>b.onclick=()=>{const it=rr.items[+b.dataset.iu];pickSheet('Unidad',['g','ml','und','kg','L','oz','porción'],it.unit,u=>{it.unit=u;sv();renderEvents()})});
     const rm=card.querySelector('[data-rrm]');rm.onclick=()=>{if(rm.dataset.sure!=='1'){rm.dataset.sure='1';rm.textContent='?';return}ev.recipes=ev.recipes.filter(x=>x!==rr);ev.lines=(ev.lines||[]).filter(l=>l.recId!==rr.id);sv();renderEvents()};
     const si=card.querySelector('[data-isearch]'),res=card.querySelector('[data-ires]');
-    const paint=()=>{const q=norm(si.value);const L=allMP().filter(x=>!q||norm(x.name).includes(q)).slice(0,60);const raw=si.value.trim();
-      res.innerHTML=(raw?`<button type="button" data-inew="1" class="add-new"><span>Escribir “${esc(raw)}” a mano<small>Pones tú la unidad y el costo</small></span><b class="add-action">+ Añadir</b></button>`:'')+L.map((x,xi)=>`<button type="button" data-ipk="${xi}"><span>${esc(x.name)}<small>${x.kind==='rec'?'Receta':'MP'} · ${esc(x.rname)} · ${x.uc>0?money(x.unit==='ml'||x.unit==='g'?x.uc:x.uc)+'/'+esc(x.unit):'sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`).join('');res.hidden=false;
-      const nb=res.querySelector('[data-inew]');if(nb)nb.onclick=()=>{rr.items.push({name:raw,unit:'und',qty:0,uc:0});sv();renderEvents()};
-      res.querySelectorAll('[data-ipk]').forEach(b=>b.onclick=()=>{const x=L[+b.dataset.ipk];rr.items.push({name:x.name,unit:x.unit,qty:0,uc:+x.uc.toFixed(4),src:(x.kind==='rec'?'Receta de ':'MP de ')+x.rname,...(x.kind==='mp'&&x.pk>0&&x.pp>0?{pk:x.pk,pp:x.pp,yl:x.yl}:{})});sv();renderEvents();setTimeout(()=>{const c2=$$('#evBody [data-rr]')[+card.dataset.rr];const q2=c2?.querySelectorAll('[data-if="qty"]');q2?.[q2.length-1]?.focus()},40)})};
+    const paint=()=>{const q=norm(si.value);const L=evMP(ev).filter(x=>x.name&&(!q||norm(x.name).includes(q))).slice(0,60);const raw=si.value.trim();
+      res.innerHTML=L.map((x,xi)=>`<button type="button" data-ipk="${xi}"><span>${esc(x.name)}<small>MP del evento · ${unitCost(x)>0?fuc(unitCost(x))+'/'+esc(x.unit):'sin precio'}</small></span><b class="add-action">+ Añadir</b></button>`).join('')+(raw&&!L.some(x=>norm(x.name)===q)?`<button type="button" data-inew="1" class="add-new"><span>Crear “${esc(raw)}” en la MP del evento<small>Luego le pones presentación y precio en “MP del evento”</small></span><b class="add-action">+ Crear</b></button>`:'')+(!L.length&&!raw?'<div class="muted small" style="padding:10px">Primero agrega MP en la pestaña “MP del evento”.</div>':'');res.hidden=false;
+      const nb=res.querySelector('[data-inew]');if(nb)nb.onclick=()=>{const m={id:uid(),name:raw,unit:'g',pack:1000,price:0,yield:100,src:''};evMP(ev).push(m);rr.items.push({ing:m.id,qty:0});sv();renderEvents()};
+      res.querySelectorAll('[data-ipk]').forEach(b=>b.onclick=()=>{const x=L[+b.dataset.ipk];rr.items.push({ing:x.id,qty:0});sv();renderEvents();setTimeout(()=>{const c2=$$('#evBody [data-rr]')[+card.dataset.rr];const q2=c2?.querySelectorAll('[data-if="qty"]');q2?.[q2.length-1]?.focus()},40)})};
     si.onfocus=paint;si.oninput=paint;si.onblur=()=>setTimeout(()=>{if(!res.contains(document.activeElement))res.hidden=true},150)});
+  B.querySelectorAll('[data-mi]').forEach(card=>{const m=evMP(ev)[+card.dataset.mi];
+    card.querySelectorAll('[data-mf]').forEach(i=>{i.oninput=()=>{const f=i.dataset.mf;m[f]=f==='name'?i.value:(i.value.includes('$')?pm(i.value):nd(i.value));if(f==='yield'&&!m.yield)m.yield=100;sv();const u=card.querySelector('[data-muc]');if(u)u.textContent=fuc(unitCost(m));evSyncLines(ev);refresh()};i.onchange=i.oninput})});
+  B.querySelectorAll('[data-mu]').forEach(b=>b.onclick=()=>{const m=evMP(ev)[+b.dataset.mu];pickSheet('Unidad',['g','ml','und','kg','L','oz'],m.unit,u=>{m.unit=u;sv();renderEvents()})});
+  B.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=()=>{const k=+b.dataset.mrm;const m=evMP(ev)[k];if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}ev.mp.splice(k,1);(ev.recipes||[]).forEach(r=>r.items=(r.items||[]).filter(it=>it.ing!==m.id));sv();renderEvents()});
+  const mn=$('#emNew');if(mn)mn.onclick=()=>{evMP(ev).push({id:uid(),name:'',unit:'g',pack:1000,price:0,yield:100,src:''});sv();renderEvents();setTimeout(()=>{const n=$$('#evBody [data-mf="name"]');n[n.length-1]?.focus()},40)};
+  const es=$('#emSearch'),er=$('#emRes');if(es){const paint=()=>{const q=norm(es.value);const L=allMP().filter(x=>x.kind==='mp'&&(!q||norm(x.name).includes(q))).slice(0,60);
+      er.innerHTML=L.map((x,xi)=>{const have=evMP(ev).some(m=>norm(m.name)===x.k);return `<button type="button" data-emp="${xi}"><span>${esc(x.name)}<small>${esc(x.rname)} · ${x.pk>0&&x.pp>0?fq(x.pk)+' '+esc(x.unit)+' a '+money(x.pp):'sin presentación'}${have?' · ya está en el evento':''}</small></span><b class="add-action">+ Traer</b></button>`}).join('')||'<div class="muted small" style="padding:10px">No hay MP con ese nombre.</div>';er.hidden=false;
+      er.querySelectorAll('[data-emp]').forEach(b=>b.onclick=()=>{const x=L[+b.dataset.emp];evMP(ev).push({id:uid(),name:x.name,unit:x.unit,pack:x.pk||1,price:x.pp||0,yield:x.yl||100,src:x.rname});sv();toast('Traída a la MP del evento');renderEvents()})};
+    es.onfocus=paint;es.oninput=paint;es.onblur=()=>setTimeout(()=>{if(!er.contains(document.activeElement))er.hidden=true},150)}
   const ad=$('#eAdd');if(ad)ad.onclick=()=>{ev.lines.push({id:uid(),name:'',cat:'Insumos',qty:1,cost:0});sv();renderEvents();setTimeout(()=>{const n=$$('#evBody [data-lf="name"]');n[n.length-1]?.focus()},40)};
   B.querySelectorAll('[data-l]').forEach(i=>{const upd=()=>{const l=ev.lines[+i.dataset.l];const f=i.dataset.lf;l[f]=f==='qty'?nd(i.value):f==='cost'?pm(i.value):i.value;sv();refresh()};if(i.tagName==='SELECT')i.onchange=upd;else{i.oninput=upd;i.onchange=upd}});
   B.querySelectorAll('[data-lrm]').forEach(b=>b.onclick=()=>{ev.lines.splice(+b.dataset.lrm,1);sv();renderEvents()});
@@ -1354,10 +1378,10 @@ $('#evExport').onclick=()=>{const ev=curEv;if(!ev||!window.XLSX)return;const c=e
   rows.push([],['Costo base','','','',Math.round(c.base)],['Margen de error %','','','',c.err*100],['Costo total','','','',Math.round(c.total)],['Costo por invitado','','','',Math.round(c.perGuest)],['Venta','','','',Math.round(c.sale)],['Utilidad','','','',Math.round(c.profit)],['Margen %','','','',+(c.margin*100).toFixed(1)]);
   if(ev.type==='colab'&&ev.partners?.length){rows.push([],['Socio','% utilidad','Aportó','Le corresponde']);ev.partners.forEach(p=>rows.push([p.name,nd(p.pct),nd(p.put),Math.round(c.profit*nd(p.pct)/100+nd(p.put))]))}
   const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:30},{wch:14},{wch:10},{wch:14},{wch:14}];XLSX.utils.book_append_sheet(wb,ws,'Evento');
-  const cr=[['Lista de compras · '+ev.name],[],['Producto','Necesitas','Unidad','Paquetes a comprar','Tamaño paquete','Precio paquete','Total compra','Sobra']];
-  c.buyList.forEach(x=>cr.push([x.name,x.qty,x.unit||'',x.packs??'',x.pk?.pk??'',x.pk?.pp??'',Math.round(x.buy),x.left!=null?+x.left.toFixed(2):'']));
-  cr.push([],['Total a comprar','','','','','',Math.round(c.buyList.reduce((a,x)=>a+x.buy,0))]);
-  const ws2=XLSX.utils.aoa_to_sheet(cr);ws2['!cols']=[{wch:30},{wch:11},{wch:8},{wch:12},{wch:12},{wch:12},{wch:13},{wch:9}];XLSX.utils.book_append_sheet(wb,ws2,'Compras');saveXlsx(wb,`Evento ${ev.name} ${ev.date||today()}.xlsx`)};
+  const cr=[['Lista de compras · '+ev.name],[],['Producto','Usas','Con margen','Unidad','Paquetes a comprar','Presentación','Precio presentación','Total compra','Sobra']];
+  c.buyList.forEach(x=>cr.push([x.name,+(+x.qty).toFixed(2),x.qe!=null?+(+x.qe).toFixed(2):'',x.unit||'',x.packs??'',x.pack||'',x.price||'',Math.round(x.buy),x.left!=null?+x.left.toFixed(2):'']));
+  cr.push([],['Total a comprar','','','','','','',Math.round(c.buyList.reduce((a,x)=>a+x.buy,0))]);
+  const ws2=XLSX.utils.aoa_to_sheet(cr);ws2['!cols']=[{wch:30},{wch:10},{wch:11},{wch:8},{wch:12},{wch:12},{wch:14},{wch:13},{wch:9}];XLSX.utils.book_append_sheet(wb,ws2,'Compras');saveXlsx(wb,`Evento ${ev.name} ${ev.date||today()}.xlsx`)};
 
 function newIngSheet(name,cb){const R=S.r[curR.id];let unit='g';const P=$('#genPane');
   P.innerHTML=`<h2>Nueva materia prima</h2><div class="field"><label for="niName">Nombre</label><input class="in" id="niName" value="${esc(name)}"></div>
