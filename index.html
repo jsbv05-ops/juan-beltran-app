@@ -368,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.1</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.2</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1746,6 +1746,14 @@ async function importSocialApk(){const rid=typeof socRid==='function'?socRid():n
       else{const i=mp(it.mp,it.unit);rec.items.push({ing:i.id,qty:it.qty,...extra})}}
     R.recipes.push(rec);byName[r.name]=rec}
   R.importApk1=true;await save('r_'+rid,R,true)}
+async function importSocialExtra1(){const rid=typeof socRid==='function'?socRid():null;if(!rid)return;const R=S.r[rid];if(!R||!R.importApk1||R.importX1)return;
+  if(db&&db===window.__jbCloud){try{const d=(await db.doc('app/r_'+rid).get()).data();if(!d||d.importX1)return}catch(e){return}}
+  const cat=n=>{let c=R.categories.find(x=>norm(x.name)===norm(n));if(!c){c={id:uid(),name:n};R.categories.push(c)}return c.id};
+  const mp=(n,u)=>{let i=R.ingredients.find(x=>norm(x.name)===norm(n));if(!i){i={id:uid(),name:n,unit:u,pack:u==='ml'?750:u==='g'?1000:1,price:0,yield:100};R.ingredients.push(i)}return i};
+  if(!R.recipes.some(x=>norm(x.name)==='batido morado')){const sir=R.recipes.find(x=>norm(x.name)==='sirope simple');
+    const items=[{ing:mp('Yogurt griego','g').id,qty:100},{ing:mp('Fresa','g').id,qty:30},{ing:mp('Arándanos','g').id,qty:20},...(sir?[{ing:sir.id,qty:2,type:'recipe'}]:[]),{ing:mp('Leche condensada','ml').id,qty:15},{ing:mp('Leche','ml').id,qty:75}];
+    R.recipes.push({id:uid(),name:'Batido Morado',cat:cat('Batidos'),portions:1,price:0,error:null,target:null,items})}
+  R.importX1=true;await save('r_'+rid,R,true)}
 async function makeDesayuno(){const st=S.meta.settings;if(st.desayunoDone||S.meta.restaurants.some(r=>r.id==='desayuno'||norm(r.name)==='desayuno'))return;
   if(db&&db===window.__jbCloud){try{const m=(await db.doc('app/meta').get()).data();if(!m||m.settings?.desayunoDone||(m.restaurants||[]).some(r=>r.id==='desayuno'))return}catch(e){return}}
   const ings=[];for(const r of S.meta.restaurants){for(const i of (S.r[r.id]?.ingredients||[])){const k=norm(i.name);if(!k)continue;const prev=ings.find(x=>norm(x.name)===k);
@@ -1765,7 +1773,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
