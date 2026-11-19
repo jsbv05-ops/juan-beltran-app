@@ -368,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.5</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.6</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -637,7 +637,7 @@ const isSubrecipeRecipe=(R,r)=>norm(catName(R,r?.cat))==='subrecetas';
 
 /* ---------- restaurante ---------- */
 let curR=null,curTab='recipes',curCat='all',recQ='';
-async function openRest(id){curR=restById(id);await loadR(id);curTab=curR.colab?'colab':isJ2(curR)?'j2ev':'recipes';curCat='all';recQ='';mpF='all';mpQ='';go('rest');renderRest()}
+async function openRest(id){curR=restById(id);j2Ev=null;await loadR(id);curTab=curR.colab?'colab':isJ2(curR)?'j2ev':'recipes';curCat='all';recQ='';mpF='all';mpQ='';go('rest');renderRest()}
 $('#rEdit').onclick=()=>openCard(curR);
 $$('#rTabs .tab').forEach(t=>t.onclick=()=>{curTab=t.dataset.tab;renderRest()});
 function renderRest(){
@@ -649,22 +649,79 @@ function renderRest(){
 }
 const isJ2=r=>!!r&&(r.j2||r.id==='j2'||/^j2$/i.test((r.name||'').trim()));
 function j2Socios(R){return R.socios||(R.socios=[{id:'s1',name:'Juan Beltran',pct:50},{id:'s2',name:'Juanse Quiñones',pct:50}])}
-function j2View(R){const ps=j2Socios(R);const L=S.events.items.filter(ev=>evR(ev).includes(curR.id)).sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
-  const rows=L.map(ev=>({ev,c:evCalc(ev)}));const act=rows.filter(x=>x.ev.status!=='lost');const tot=act.reduce((a,x)=>a+x.c.profit,0),sale=act.reduce((a,x)=>a+x.c.sale,0);const tp=ps.reduce((a,p)=>a+nd(p.pct),0);const okp=Math.abs(tp-100)<0.01;
+let j2Ev=null,j2Ty='abono',j2Pay='transferencia',j2Img=null;
+const J2T={abono:'Abono del cliente',gasto:'Compra / gasto'};
+function evAcc(ev){const L=ev.cuenta||[];const ab=L.filter(m=>m.type==='abono').reduce((a,m)=>a+nd(m.amount),0),ga=L.filter(m=>m.type==='gasto').reduce((a,m)=>a+nd(m.amount),0);
+  const c=evCalc(ev);const venta=c.sale;const real=ga>0;const gan=venta-(real?ga:c.total);return{L,ab,ga,venta,disp:ab-ga,deben:Math.max(0,venta-ab),gan,real,est:c.total}}
+function j2Me(ps){return ps.find(p=>norm(p.name).includes('juan beltran'))||ps[0]}
+function j2Share(ev,R){const ps=j2Socios(R);const me=j2Me(ps);return me?Math.max(0,evAcc(ev).gan)*nd(me.pct)/100:0}
+function syncJ2Ledger(){for(const r of S.meta.restaurants){if(!isJ2(r))continue;const R=S.r[r.id];if(!R)continue;R.ledger=R.ledger||[];let ch=false;const keep=new Set();
+  for(const ev of S.events.items.filter(e=>evR(e).includes(r.id)&&e.status==='done')){const id='j2ev_'+ev.id;const amt=Math.round(j2Share(ev,R));if(amt<1)continue;keep.add(id);
+    const desc='Evento J2 · '+(ev.name||'Evento')+' · tu parte';let m=R.ledger.find(x=>x.id===id);
+    if(!m){R.ledger.push({id,type:'cargo',auto:'j2',evId:ev.id,date:ev.date||today(),amount:amt,unit:amt,qty:1,desc,at:Date.now()});ch=true}
+    else if(m.amount!==amt||m.desc!==desc||(ev.date&&m.date!==ev.date)){Object.assign(m,{amount:amt,unit:amt,desc,date:ev.date||m.date});ch=true}}
+  const n0=R.ledger.length;R.ledger=R.ledger.filter(x=>!(x.auto==='j2'&&!keep.has(x.id)));if(R.ledger.length!==n0)ch=true;if(ch)saveR(r.id)}}
+function j2AccView(R){const ev=S.events.items.find(e=>e.id===j2Ev);if(!ev){j2Ev=null;return j2View(R)}
+  const a=evAcc(ev),ps=j2Socios(R),me=j2Me(ps),done=ev.status==='done';const list=a.L.map(m=>m).sort((x,y)=>(y.date||'').localeCompare(x.date||'')||(y.at||0)-(x.at||0));
+  return `<div class="stack">
+   <div class="rowx"><button class="btn sm ghost" id="j2Back">← Eventos de J2</button><span class="sp"></span><button class="btn sm ghost" id="j2Open">Abrir evento</button></div>
+   <div class="card stack" style="gap:6px"><div class="rowx"><h2 class="sec" style="margin:0">${esc(ev.name||'Evento')}</h2><span class="sp"></span><span class="chip" style="background:${done?'#173C32':'var(--fg)'};color:var(--bg)">${ST[ev.status]||''}</span></div>
+    <span class="muted small">${fdate(ev.date)}${ev.guests?` · ${ev.guests} invitados`:''}${ev.place?` · ${esc(ev.place)}`:''}</span>
+    ${done?'':'<div class="rowx"><span class="muted small">Cuando el evento ya se haya hecho, márcalo para que tu parte pase a Controles.</span><span class="sp"></span><button class="btn sm" id="j2Done" style="background:#173C32;color:#F3EBDD">Marcar como realizado</button></div>'}</div>
+   <div class="kpis">
+    <div class="kpi"><small>Valor del evento</small><b class="num">${money(a.venta)}</b></div>
+    <div class="kpi"><small>Nos han abonado</small><b class="num">${money(a.ab)}</b></div>
+    <div class="kpi"><small>Gastado en compras</small><b class="num">${money(a.ga)}</b></div>
+    <div class="kpi hl"><small>Plata disponible</small><b class="num" style="${a.disp<0?'color:#E07A5F':''}">${money(a.disp)}</b></div>
+    <div class="kpi"><small>Aún nos deben</small><b class="num">${money(a.deben)}</b></div>
+    <div class="kpi"><small>Ganancia ${a.real?'real':'estimada'}</small><b class="num">${money(a.gan)}</b></div>
+   </div>
+   ${a.real?'':'<span class="muted small">La ganancia es estimada con el costo del evento hasta que registres las compras reales.</span>'}
+   <div class="card stack" style="gap:6px"><b>Reparto de la ganancia</b>${ps.map(p=>`<div class="rowx"><span>${esc(p.name||'Socio')} · ${fq(nd(p.pct))}%</span><span class="sp"></span><b class="num">${money(Math.max(0,a.gan)*nd(p.pct)/100)}</b></div>`).join('')}
+    <span class="muted small">${done?`✓ La parte de ${esc(me?.name||'Juan Beltran')} ya aparece en Controles, en lo que te debe J2.`:`La parte de ${esc(me?.name||'Juan Beltran')} pasará sola a Controles cuando el evento esté como realizado.`}</span></div>
+   <form class="card stack" id="j2Form"><div class="seg" role="group">${Object.entries(J2T).map(([k,v])=>`<button type="button" data-j2ty="${k}" aria-pressed="${k===j2Ty}">${v}</button>`).join('')}</div>
+    <div class="grid2">
+     <div class="field"><label for="j2Date">Fecha</label><input class="in" type="date" id="j2Date" value="${today()}"></div>
+     <div class="field"><label for="j2Amt">${j2Ty==='abono'?'Valor abonado':'Valor de la compra'}</label><input class="in num" id="j2Amt" inputmode="numeric" placeholder="$0"></div>
+     <div class="field span2"><label for="j2Desc">Detalle (opcional)</label><input class="in" id="j2Desc" placeholder="${j2Ty==='abono'?'Ej: anticipo 50%':'Ej: frutas y hielo en la plaza'}"></div>
+     <div class="field span2"><span class="lab">${j2Ty==='abono'?'Cómo pagaron':'Cómo se pagó'}</span><div class="seg">${Object.entries(PM).map(([k,v])=>`<button type="button" data-j2pm="${k}" aria-pressed="${k===j2Pay}">${v}</button>`).join('')}</div></div>
+     <div class="field span2"><label for="j2File">${j2Ty==='abono'?'Comprobante':'Factura o foto'} (opcional)</label><input class="in" type="file" id="j2File" accept="image/*">${j2Img?'<small class="muted">Imagen lista ✓</small>':''}</div>
+    </div>
+    <div class="rowx"><span class="sp"></span><button class="btn">Registrar</button></div></form>
+   ${list.length?`<div class="stack" style="gap:8px">${list.map(m=>{const ab=m.type==='abono';return `<div class="mv"><div class="mvh"><span class="chip" style="background:${ab?'var(--good)':'#173C32'}">${ab?'Abono':'Compra'}</span>${m.method?`<span class="chip" style="background:#B8913A;color:#173C32">${PM[m.method]||m.method}</span>`:''}<span class="muted small">${m.date?fdate(m.date):'Sin fecha'}</span><span class="sp"></span><b class="num ledger-amt ${ab?'neg':'pos'}">${ab?'+':'−'}${money(nd(m.amount))}</b></div>
+     ${m.desc?`<div class="small">${esc(m.desc)}</div>`:''}
+     <div class="rowx" style="gap:6px">${m.img?`<button class="btn sm ghost" data-j2img="${m.img}">Ver ${ab?'comprobante':'factura'}</button>`:''}<span class="sp"></span><button class="x" data-j2rm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty card">Aún no hay abonos ni compras en este evento.</div>'}
+  </div>`}
+function j2View(R){if(j2Ev)return j2AccView(R);const ps=j2Socios(R);const L=S.events.items.filter(ev=>evR(ev).includes(curR.id)).sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
+  const rows=L.map(ev=>{const c=evCalc(ev),g=evAcc(ev).gan;return{ev,c:Object.assign({},c,{profit:g,total:c.sale-g})}});const act=rows.filter(x=>x.ev.status!=='lost');const tot=act.reduce((a,x)=>a+x.c.profit,0),sale=act.reduce((a,x)=>a+x.c.sale,0);const tp=ps.reduce((a,p)=>a+nd(p.pct),0);const okp=Math.abs(tp-100)<0.01;
   return `<div class="stack">
    <div class="kpis"><div class="kpi"><small>Eventos</small><b class="num">${act.length}</b></div><div class="kpi"><small>Ventas</small><b class="num">${money(sale)}</b></div><div class="kpi hl"><small>Ganancia total</small><b class="num">${money(tot)}</b></div></div>
    <div class="card stack"><div class="rowx"><h2 class="sec">Socios de J2</h2><span class="sp"></span><button class="btn sm ghost" id="j2pAdd">+ Socio</button></div>
     ${ps.map((p,k)=>`<div class="rowx" style="flex-wrap:nowrap;gap:8px"><input class="in" data-j2p="${k}" data-f="name" value="${esc(p.name)}" placeholder="Nombre" style="flex:1;min-width:0;font-weight:700"><input class="in num" data-j2p="${k}" data-f="pct" inputmode="decimal" value="${p.pct}" style="width:76px"><b class="num" style="min-width:96px;text-align:right">${money(tot*nd(p.pct)/100)}</b><button class="x" data-j2rm="${k}" aria-label="Quitar">✕</button></div>`).join('')}
     <span class="small ${okp?'muted':''}" style="${okp?'':'color:var(--bad)'}">Suma: ${fq(tp)}%${okp?' · reparto de la ganancia de todos los eventos de J2 (menos los que no se hicieron)':' (debe dar 100%)'}</span></div>
    <div class="rowx"><h2 class="sec">Eventos de J2</h2><span class="sp"></span><button class="btn" id="j2New" style="background:#151515;color:#F3EBDD">+ Nuevo evento</button></div>
-   ${rows.length?`<div class="rlist">${rows.map(({ev,c})=>`<button class="rc" data-j2ev="${ev.id}"><span class="rowx"><span class="chip" style="background:var(--fg);color:var(--bg)">${ST[ev.status]||''}</span><span class="muted small">${fdate(ev.date)}${ev.guests?` · ${ev.guests} invitados`:''}</span></span><h3>${esc(ev.name)}</h3><div class="k3"><div><small>Venta</small><b class="num">${money(c.sale)}</b></div><div><small>Costo</small><b class="num">${money(c.total)}</b></div><div><small>Ganancia</small><b class="num">${money(c.profit)}</b></div></div><span class="muted small">${ps.map(p=>`${esc((p.name||'Socio').split(' ')[0])}: ${money(c.profit*nd(p.pct)/100)}`).join(' · ')}</span></button>`).join('')}</div>`:'<div class="empty card">Aún no hay eventos de J2. Crea uno aquí o, en un evento que ya tengas, marca J2 en “Para quién es”.</div>'}
+   ${rows.length?`<div class="rlist">${rows.map(({ev,c})=>{const a=evAcc(ev);return `<div class="stack" style="gap:6px"><button class="rc" data-j2ev="${ev.id}"><span class="rowx"><span class="chip" style="background:var(--fg);color:var(--bg)">${ST[ev.status]||''}</span><span class="muted small">${fdate(ev.date)}${ev.guests?` · ${ev.guests} invitados`:''}</span></span><h3>${esc(ev.name)}</h3><div class="k3"><div><small>Venta</small><b class="num">${money(c.sale)}</b></div><div><small>Costo</small><b class="num">${money(c.total)}</b></div><div><small>Ganancia</small><b class="num">${money(c.profit)}</b></div></div><span class="muted small">${ps.map(p=>`${esc((p.name||'Socio').split(' ')[0])}: ${money(c.profit*nd(p.pct)/100)}`).join(' · ')}</span></button>
+     <button class="btn sm ghost" data-j2acc="${ev.id}" style="justify-content:space-between;display:flex;gap:8px"><span>💵 Cuenta del evento</span><span class="num">Abonado ${money(a.ab)} · Deben ${money(a.deben)}</span></button></div>`}).join('')}</div>`:'<div class="empty card">Aún no hay eventos de J2. Crea uno aquí o, en un evento que ya tengas, marca J2 en “Para quién es”.</div>'}
   </div>`}
 function bindJ2(R){const ps=j2Socios(R);const sv=()=>saveR(curR.id);
   $$('[data-j2p]').forEach(i=>{i.oninput=()=>{const p=ps[+i.dataset.j2p];p[i.dataset.f]=i.dataset.f==='name'?i.value:nd(i.value);sv()};i.onchange=()=>renderRest()});
   $$('[data-j2rm]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}ps.splice(+b.dataset.j2rm,1);sv();renderRest()});
   const pa=$('#j2pAdd');if(pa)pa.onclick=()=>{ps.push({id:uid(),name:'',pct:0});sv();renderRest()};
   const nw=$('#j2New');if(nw)nw.onclick=async()=>{const ev={id:uid(),name:'Nuevo evento J2',date:'',place:'',type:'own',status:'cot',guests:0,notes:'',lines:[],error:5,target:40,priceMode:'person',price:0,partners:[],buys:[],jb:false,rids:[curR.id],mp:[]};S.events.items.push(ev);save('events',S.events);await loadAllR();curEv=ev;evTab='datos';go('events');renderEvents()};
-  $$('[data-j2ev]').forEach(b=>b.onclick=async()=>{await loadAllR();curEv=S.events.items.find(e=>e.id===b.dataset.j2ev);evTab='datos';go('events');renderEvents()})}
+  $$('[data-j2ev]').forEach(b=>b.onclick=async()=>{await loadAllR();curEv=S.events.items.find(e=>e.id===b.dataset.j2ev);evTab='datos';go('events');renderEvents()});
+  $$('[data-j2acc]').forEach(b=>b.onclick=()=>{j2Ev=b.dataset.j2acc;j2Img=null;blip(800,.03);renderRest()});
+  const ev=j2Ev&&S.events.items.find(e=>e.id===j2Ev);if(!ev)return;const sve=()=>save('events',S.events);
+  $('#j2Back').onclick=()=>{j2Ev=null;renderRest()};
+  $('#j2Open').onclick=async()=>{await loadAllR();curEv=ev;evTab='datos';go('events');renderEvents()};
+  const dn=$('#j2Done');if(dn)dn.onclick=()=>{ev.status='done';sve();syncJ2Ledger();toast('Evento realizado · tu parte pasó a Controles');renderRest()};
+  $$('[data-j2ty]').forEach(b=>b.onclick=()=>{j2Ty=b.dataset.j2ty;j2Img=null;renderRest()});
+  $$('[data-j2pm]').forEach(b=>b.onclick=()=>{j2Pay=b.dataset.j2pm;$$('[data-j2pm]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
+  const fi=$('#j2File');if(fi)fi.onchange=async()=>{const f=fi.files[0];if(f){j2Img=await shrink(f,1100,'image/jpeg',.75);toast('Imagen lista')}};
+  $('#j2Form').onsubmit=e=>{e.preventDefault();const amt=pm($('#j2Amt').value);if(!amt)return toast('Escribe el valor');
+    const m={id:uid(),type:j2Ty,date:$('#j2Date').value||today(),amount:Math.round(amt),method:j2Pay,desc:$('#j2Desc').value.trim(),at:Date.now()};if(j2Img)m.img=storeImg(j2Img);
+    ev.cuenta=ev.cuenta||[];ev.cuenta.push(m);j2Img=null;sve();syncJ2Ledger();blip(j2Ty==='abono'?1300:1000);toast(j2Ty==='abono'?'Abono registrado':'Compra registrada');renderRest()};
+  $$('[data-j2rm]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}const m=(ev.cuenta||[]).find(x=>x.id===b.dataset.j2rm);if(m?.img)delDoc('img_'+m.img);ev.cuenta=(ev.cuenta||[]).filter(x=>x.id!==b.dataset.j2rm);sve();syncJ2Ledger();renderRest()});
+  $$('[data-j2img]').forEach(b=>b.onclick=async()=>{const s=await loadImg(b.dataset.j2img);const P=$('#genPane');P.innerHTML=`<h2>Imagen</h2>${s?`<img src="${s}" alt="Comprobante" style="width:100%;border-radius:10px">`:'<span class="muted">No se encontró la imagen</span>'}<button class="btn ghost" id="vClose">Cerrar</button>`;$('#vClose').onclick=()=>$('#genSheet').hidden=true;$('#genSheet').hidden=false})}
 function recipesView(R){
   const q=norm(recQ);const list=R.recipes.filter(r=>(curCat==='all'||(curCat==='none'?!R.categories.some(c=>c.id===r.cat):r.cat===curCat))&&(!q||norm(r.name).includes(q)||norm(catName(R,r.cat)).includes(q)));
   const isSubCategory=curCat!=='all'&&curCat!=='none'&&norm(catName(R,curCat))==='subrecetas';const sum=R.recipes.map(r=>calc(r,R));const avgM=sum.length?sum.reduce((a,c)=>a+c.margin,0)/sum.length:0;
@@ -1346,7 +1403,7 @@ function renderEvents(){
   $('#evAll').onclick=()=>{curEv=null;renderEvents()};
   B.querySelectorAll('[data-et]').forEach(b=>b.onclick=()=>{evTab=b.dataset.et;renderEvents()});
   const refresh=()=>evRefresh(B,ev);
-  B.querySelectorAll('[data-set]').forEach(b=>b.onclick=()=>{ev[b.dataset.set]=b.dataset.v;sv();blip(820,.03);renderEvents()});
+  B.querySelectorAll('[data-set]').forEach(b=>b.onclick=()=>{ev[b.dataset.set]=b.dataset.v;sv();if(b.dataset.set==='status')syncJ2Ledger();blip(820,.03);renderEvents()});
   B.querySelectorAll('[data-lcat]').forEach(b=>b.onclick=()=>{const k=+b.dataset.lcat;pickSheet('Tipo de costo',ECAT,ev.lines[k].cat,v=>{ev.lines[k].cat=v;sv();renderEvents()})});
   B.querySelectorAll('[data-e]').forEach(i=>{const f=i.dataset.e;const val=()=>i.dataset.num==='money'?pm(i.value):i.dataset.num?nd(i.value):i.value;
     if(i.tagName==='SELECT'){i.onchange=()=>{ev[f]=val();sv();renderEvents()}}
@@ -1503,7 +1560,7 @@ function allocate(L){const ch=L.filter(m=>m.type!=='pago').map(m=>({m,left:nd(m.
 const prodName=m=>(m.type==='turno'?'Turno':m.type==='ases'?'Asesoría':'Servicio')+(m.desc?` · ${m.desc}`:'');
 function groupLines(rows){const g=[];for(const r of rows){const k=r.name+'|'+r.unit;const f=g.find(x=>x.k===k);if(f){f.qty++;f.total+=r.unit}else g.push({k,name:r.name,unit:r.unit,qty:1,total:r.unit})}return g}
 function renderCtrl(){
-  const B=$('#ctBody');
+  syncJ2Ledger();const B=$('#ctBody');
   if(!ctR){$('#ctTitle').textContent='Controles';const tot=S.meta.restaurants.reduce((a,r)=>a+Math.max(0,balance(S.r[r.id])),0);
     B.innerHTML=`<div class="stack wrapmax"><div class="kpis"><div class="kpi hl"><small>Te deben en total</small><b class="num">${money(tot)}</b></div></div>
      <div class="rrows">${S.meta.restaurants.map(r=>{const b=balance(S.r[r.id]);return `<button class="rrow" data-cr="${r.id}"><span class="lg" style="background:${tone(r)}">${rFace(r)}</span><span class="nm">${esc(r.name)}</span><span class="st">${b>0.5?`<small>Debe</small><span class="pill due num">${money(b)}</span>`:b<-0.5?`<small>Saldo a favor</small><span class="pill fav num">${money(-b)}</span>`:`<span class="pill ok">Al día ✓</span>`}</span></button>`}).join('')||'<div class="empty">Crea un restaurante primero.</div>'}</div></div>`;
@@ -1530,7 +1587,7 @@ function renderCtrl(){
    ${list.length?`<div class="stack" style="gap:8px">${list.map(({m})=>{const p=m.type==='pago';return `<div class="mv"><div class="mvh"><span class="chip" style="background:${p?'var(--good)':'#173C32'}">${LT[m.type]}${m.qty>1?(m.type==='turno'?` · ${m.qty} días`:` ×${m.qty}`):''}</span>${p&&m.method?`<span class="chip" style="background:#B8913A;color:#173C32">${PM[m.method]||m.method}</span>`:''}<span class="muted small">${m.date?fdr(m):'Sin fecha'}</span><span class="sp"></span><b class="num ledger-amt ${p?'neg':'pos'}">${p?'−':'+'}${money(nd(m.amount))}</b></div>
      ${p?st(m):''}
      ${m.desc?`<div class="small">${esc(m.desc)}</div>`:''}
-     <div class="rowx" style="gap:6px">${p?'':st(m)}${m.img?`<button class="btn sm ghost" data-vimg="${m.img}">Ver comprobante</button>`:''}${p?`<button class="btn sm" data-rcpt="${m.id}" style="background:#173C32;color:#F3EBDD">Recibo PDF</button>`:''}<span class="sp"></span><button class="x" data-lm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty">Sin movimientos todavía.</div>'}</div>`;
+     <div class="rowx" style="gap:6px">${p?'':st(m)}${m.img?`<button class="btn sm ghost" data-vimg="${m.img}">Ver comprobante</button>`:''}${p?`<button class="btn sm" data-rcpt="${m.id}" style="background:#173C32;color:#F3EBDD">Recibo PDF</button>`:''}<span class="sp"></span>${m.auto?'<span class="chip" style="background:var(--grey);color:var(--fg)">Automático · J2</span>':`<button class="x" data-lm="${m.id}" aria-label="Eliminar">✕</button>`}</div></div>`}).join('')}</div>`:'<div class="empty">Sin movimientos todavía.</div>'}</div>`;
   B.querySelectorAll('[data-ty]').forEach(b=>b.onclick=()=>{ctTy=b.dataset.ty;ctImg=null;ctSel=[];renderCtrl()});
   const selSync=()=>{let sum=0;B.querySelectorAll('[data-sel]').forEach(x=>{const on=ctSel.includes(x.dataset.sel);x.setAttribute('aria-pressed',on);if(on)sum+=+x.dataset.left});const inf=$('#ctSelInfo');if(inf)inf.textContent=ctSel.length?`${ctSel.length} seleccionado${ctSel.length>1?'s':''} · ${money(sum)}`:'';const a=$('#ctAmt');if(a&&ctSel.length)a.value=Math.round(sum).toLocaleString('es-CO')};
   B.querySelectorAll('[data-sel]').forEach(b=>b.onclick=()=>{const id=b.dataset.sel;ctSel=ctSel.includes(id)?ctSel.filter(x=>x!==id):[...ctSel,id];blip(900,.02);selSync()});
