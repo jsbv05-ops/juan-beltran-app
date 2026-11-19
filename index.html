@@ -368,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.6</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.7</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -650,9 +650,12 @@ function renderRest(){
 const isJ2=r=>!!r&&(r.j2||r.id==='j2'||/^j2$/i.test((r.name||'').trim()));
 function j2Socios(R){return R.socios||(R.socios=[{id:'s1',name:'Juan Beltran',pct:50},{id:'s2',name:'Juanse Quiñones',pct:50}])}
 let j2Ev=null,j2Ty='abono',j2Pay='transferencia',j2Img=null;
-const J2T={abono:'Abono del cliente',gasto:'Compra / gasto'};
-function evAcc(ev){const L=ev.cuenta||[];const ab=L.filter(m=>m.type==='abono').reduce((a,m)=>a+nd(m.amount),0),ga=L.filter(m=>m.type==='gasto').reduce((a,m)=>a+nd(m.amount),0);
-  const c=evCalc(ev);const venta=c.sale;const real=ga>0;const gan=venta-(real?ga:c.total);return{L,ab,ga,venta,disp:ab-ga,deben:Math.max(0,venta-ab),gan,real,est:c.total}}
+const J2T={abono:'Abono del cliente',gasto:'Otro gasto (fuera de la lista)'};
+function evGot(ev,l){const b=ev.buys||[];return b.includes(l.id)||b.includes('rec:'+norm(l.name))}
+function evAcc(ev){const L=ev.cuenta||[];const ab=L.filter(m=>m.type==='abono').reduce((a,m)=>a+nd(m.amount),0),ex=L.filter(m=>m.type==='gasto').reduce((a,m)=>a+nd(m.amount),0);
+  const c=evCalc(ev);const venta=c.sale;const bl=c.buyList||[];const got=bl.filter(l=>evGot(ev,l)),pend=bl.filter(l=>!evGot(ev,l));
+  const gl=got.reduce((a,l)=>a+nd(l.buy),0),gp=pend.reduce((a,l)=>a+nd(l.buy),0);const ga=gl+ex;const gan=venta-c.total-ex;
+  return{L,ab,ga,gl,gp,ex,bl,got,pend,venta,disp:ab-ga,deben:Math.max(0,venta-ab),gan,est:c.total}}
 function j2Me(ps){return ps.find(p=>norm(p.name).includes('juan beltran'))||ps[0]}
 function j2Share(ev,R){const ps=j2Socios(R);const me=j2Me(ps);return me?Math.max(0,evAcc(ev).gan)*nd(me.pct)/100:0}
 function syncJ2Ledger(){for(const r of S.meta.restaurants){if(!isJ2(r))continue;const R=S.r[r.id];if(!R)continue;R.ledger=R.ledger||[];let ch=false;const keep=new Set();
@@ -673,24 +676,28 @@ function j2AccView(R){const ev=S.events.items.find(e=>e.id===j2Ev);if(!ev){j2Ev=
     <div class="kpi"><small>Nos han abonado</small><b class="num">${money(a.ab)}</b></div>
     <div class="kpi"><small>Gastado en compras</small><b class="num">${money(a.ga)}</b></div>
     <div class="kpi hl"><small>Plata disponible</small><b class="num" style="${a.disp<0?'color:#E07A5F':''}">${money(a.disp)}</b></div>
+    <div class="kpi"><small>Falta por comprar</small><b class="num">${money(a.gp)}</b></div>
     <div class="kpi"><small>Aún nos deben</small><b class="num">${money(a.deben)}</b></div>
-    <div class="kpi"><small>Ganancia ${a.real?'real':'estimada'}</small><b class="num">${money(a.gan)}</b></div>
+    <div class="kpi"><small>Ganancia</small><b class="num">${money(a.gan)}</b></div>
    </div>
-   ${a.real?'':'<span class="muted small">La ganancia es estimada con el costo del evento hasta que registres las compras reales.</span>'}
+   <div class="card stack" style="gap:4px"><div class="rowx"><b>Compras de la lista</b><span class="sp"></span><span class="muted small">${a.got.length} de ${a.bl.length} hechas</span></div>
+    ${a.bl.length?`<div style="height:6px;border-radius:6px;background:var(--grey);overflow:hidden"><div style="height:100%;width:${a.bl.length?Math.round(a.got.length/a.bl.length*100):0}%;background:#173C32"></div></div>
+    ${a.bl.map(l=>{const g=evGot(ev,l);const u=l.unit?' '+esc(l.unit):'';const det=l.rec&&l.packs?`${l.packs} × ${fq(l.pack)}${u}`:(l.qty?fq(l.qty)+u:'');return `<label class="task ${g?'done':''}" style="box-shadow:none;padding:6px 0"><input type="checkbox" data-j2buy="${esc(l.id)}" data-nm="${esc('rec:'+norm(l.name))}" ${g?'checked':''}><span class="t"><b>${esc(l.name)}</b><small class="muted">${det?det+' · ':''}${money(l.buy)}</small></span></label>`}).join('')}
+    <span class="muted small">Lo que marques como comprado se descuenta solo de la plata disponible. Es la misma lista de la pestaña Compras del evento.</span>`:'<span class="muted small">Este evento aún no tiene lista de compras (se arma con las recetas y líneas de Insumos y Bebidas en Costos).</span>'}</div>
    <div class="card stack" style="gap:6px"><b>Reparto de la ganancia</b>${ps.map(p=>`<div class="rowx"><span>${esc(p.name||'Socio')} · ${fq(nd(p.pct))}%</span><span class="sp"></span><b class="num">${money(Math.max(0,a.gan)*nd(p.pct)/100)}</b></div>`).join('')}
     <span class="muted small">${done?`✓ La parte de ${esc(me?.name||'Juan Beltran')} ya aparece en Controles, en lo que te debe J2.`:`La parte de ${esc(me?.name||'Juan Beltran')} pasará sola a Controles cuando el evento esté como realizado.`}</span></div>
    <form class="card stack" id="j2Form"><div class="seg" role="group">${Object.entries(J2T).map(([k,v])=>`<button type="button" data-j2ty="${k}" aria-pressed="${k===j2Ty}">${v}</button>`).join('')}</div>
     <div class="grid2">
      <div class="field"><label for="j2Date">Fecha</label><input class="in" type="date" id="j2Date" value="${today()}"></div>
      <div class="field"><label for="j2Amt">${j2Ty==='abono'?'Valor abonado':'Valor de la compra'}</label><input class="in num" id="j2Amt" inputmode="numeric" placeholder="$0"></div>
-     <div class="field span2"><label for="j2Desc">Detalle (opcional)</label><input class="in" id="j2Desc" placeholder="${j2Ty==='abono'?'Ej: anticipo 50%':'Ej: frutas y hielo en la plaza'}"></div>
+     <div class="field span2"><label for="j2Desc">Detalle (opcional)</label><input class="in" id="j2Desc" placeholder="${j2Ty==='abono'?'Ej: anticipo 50%':'Ej: transporte, hielo extra, vasos'}"></div>
      <div class="field span2"><span class="lab">${j2Ty==='abono'?'Cómo pagaron':'Cómo se pagó'}</span><div class="seg">${Object.entries(PM).map(([k,v])=>`<button type="button" data-j2pm="${k}" aria-pressed="${k===j2Pay}">${v}</button>`).join('')}</div></div>
      <div class="field span2"><label for="j2File">${j2Ty==='abono'?'Comprobante':'Factura o foto'} (opcional)</label><input class="in" type="file" id="j2File" accept="image/*">${j2Img?'<small class="muted">Imagen lista ✓</small>':''}</div>
     </div>
     <div class="rowx"><span class="sp"></span><button class="btn">Registrar</button></div></form>
-   ${list.length?`<div class="stack" style="gap:8px">${list.map(m=>{const ab=m.type==='abono';return `<div class="mv"><div class="mvh"><span class="chip" style="background:${ab?'var(--good)':'#173C32'}">${ab?'Abono':'Compra'}</span>${m.method?`<span class="chip" style="background:#B8913A;color:#173C32">${PM[m.method]||m.method}</span>`:''}<span class="muted small">${m.date?fdate(m.date):'Sin fecha'}</span><span class="sp"></span><b class="num ledger-amt ${ab?'neg':'pos'}">${ab?'+':'−'}${money(nd(m.amount))}</b></div>
+   ${list.length?`<div class="stack" style="gap:8px">${list.map(m=>{const ab=m.type==='abono';return `<div class="mv"><div class="mvh"><span class="chip" style="background:${ab?'var(--good)':'#173C32'}">${ab?'Abono':'Otro gasto'}</span>${m.method?`<span class="chip" style="background:#B8913A;color:#173C32">${PM[m.method]||m.method}</span>`:''}<span class="muted small">${m.date?fdate(m.date):'Sin fecha'}</span><span class="sp"></span><b class="num ledger-amt ${ab?'neg':'pos'}">${ab?'+':'−'}${money(nd(m.amount))}</b></div>
      ${m.desc?`<div class="small">${esc(m.desc)}</div>`:''}
-     <div class="rowx" style="gap:6px">${m.img?`<button class="btn sm ghost" data-j2img="${m.img}">Ver ${ab?'comprobante':'factura'}</button>`:''}<span class="sp"></span><button class="x" data-j2rm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty card">Aún no hay abonos ni compras en este evento.</div>'}
+     <div class="rowx" style="gap:6px">${m.img?`<button class="btn sm ghost" data-j2img="${m.img}">Ver ${ab?'comprobante':'factura'}</button>`:''}<span class="sp"></span><button class="x" data-j2rm="${m.id}" aria-label="Eliminar">✕</button></div></div>`}).join('')}</div>`:'<div class="empty card">Aún no hay abonos ni otros gastos en este evento.</div>'}
   </div>`}
 function j2View(R){if(j2Ev)return j2AccView(R);const ps=j2Socios(R);const L=S.events.items.filter(ev=>evR(ev).includes(curR.id)).sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
   const rows=L.map(ev=>{const c=evCalc(ev),g=evAcc(ev).gan;return{ev,c:Object.assign({},c,{profit:g,total:c.sale-g})}});const act=rows.filter(x=>x.ev.status!=='lost');const tot=act.reduce((a,x)=>a+x.c.profit,0),sale=act.reduce((a,x)=>a+x.c.sale,0);const tp=ps.reduce((a,p)=>a+nd(p.pct),0);const okp=Math.abs(tp-100)<0.01;
@@ -711,6 +718,7 @@ function bindJ2(R){const ps=j2Socios(R);const sv=()=>saveR(curR.id);
   $$('[data-j2ev]').forEach(b=>b.onclick=async()=>{await loadAllR();curEv=S.events.items.find(e=>e.id===b.dataset.j2ev);evTab='datos';go('events');renderEvents()});
   $$('[data-j2acc]').forEach(b=>b.onclick=()=>{j2Ev=b.dataset.j2acc;j2Img=null;blip(800,.03);renderRest()});
   const ev=j2Ev&&S.events.items.find(e=>e.id===j2Ev);if(!ev)return;const sve=()=>save('events',S.events);
+  $$('[data-j2buy]').forEach(c2=>c2.onchange=()=>{const k=c2.dataset.j2buy,nm=c2.dataset.nm;ev.buys=(ev.buys||[]).filter(x=>x!==k&&x!==nm);if(c2.checked)ev.buys.push(k);sve();syncJ2Ledger();blip(c2.checked?1200:700,.03);renderRest()});
   $('#j2Back').onclick=()=>{j2Ev=null;renderRest()};
   $('#j2Open').onclick=async()=>{await loadAllR();curEv=ev;evTab='datos';go('events');renderEvents()};
   const dn=$('#j2Done');if(dn)dn.onclick=()=>{ev.status='done';sve();syncJ2Ledger();toast('Evento realizado · tu parte pasó a Controles');renderRest()};
@@ -1441,7 +1449,7 @@ function renderEvents(){
   const pa=$('#pAdd');if(pa)pa.onclick=()=>{ev.partners.push({name:ev.partners.length?'':'Juan Beltran',pct:ev.partners.length?0:50,put:0});sv();renderEvents()};
   B.querySelectorAll('[data-p]').forEach(i=>{i.oninput=()=>{const p=ev.partners[+i.dataset.p];const f=i.dataset.pf;p[f]=f==='name'?i.value:f==='put'?pm(i.value):nd(i.value);sv();refresh()};i.onchange=i.oninput});
   B.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>{ev.partners.splice(+b.dataset.prm,1);sv();renderEvents()});
-  B.querySelectorAll('[data-buyev]').forEach(c2=>c2.onchange=()=>{const k=c2.dataset.buyev;ev.buys=c2.checked?[...ev.buys,k]:ev.buys.filter(x=>x!==k);sv();renderEvents()});
+  B.querySelectorAll('[data-buyev]').forEach(c2=>c2.onchange=()=>{const k=c2.dataset.buyev;ev.buys=c2.checked?[...ev.buys,k]:ev.buys.filter(x=>x!==k);sv();syncJ2Ledger();renderEvents()});
   const dl=$('#evDel');if(dl)dl.onclick=e=>{const b=e.currentTarget;if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Toca otra vez para eliminar';return}S.events.items=S.events.items.filter(x=>x.id!==ev.id);sv();curEv=null;renderEvents()};
 }
 function evRefresh(B,ev){const c=evCalc(ev);const set=(k,v)=>B.querySelectorAll(`[data-o="${k}"]`).forEach(e=>e.textContent=v);
