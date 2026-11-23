@@ -181,6 +181,9 @@ td .in{padding:6px 8px;border-radius:8px}
 .w-name{min-width:150px}
 .bar-p{height:6px;border-radius:3px;background:var(--panel-2);margin-top:3px;overflow:hidden}
 .bar-p i{display:block;height:100%;background:var(--sel)}
+.resbar{height:18px;border-radius:999px;background:var(--grey,#ddd);overflow:hidden;display:flex}.resbar i{display:block;height:100%}
+.resbig{font-size:44px;font-weight:900;line-height:1;letter-spacing:-.02em}
+.resrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(0,0,0,.08);flex-wrap:wrap}
 .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .kpi{background:var(--panel);border-radius:14px;box-shadow:var(--shadow);padding:12px;min-width:0}
 .kpi small{display:block;font-size:11.5px;font-weight:700;color:var(--muted)}
@@ -368,7 +371,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.8</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.9</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1335,19 +1338,105 @@ const evJB=ev=>ev.jb??(evR(ev).length===0);
 const evWho=ev=>[...(evJB(ev)?['Juan Beltran']:[]),...evR(ev).map(id=>restById(id)?.name||'')].join(' + ');
 function evOwners(ev){const ids=evR(ev);const pill=(id,name,bg,on)=>`<button type="button" class="tab" data-own="${id}" aria-selected="${on}" style="${on?`background:${bg};color:#fff`:''}">${on?'✓ ':''}${esc(name)}</button>`;
  return pill('jb','Juan Beltran','#173C32',evJB(ev))+S.meta.restaurants.map(r=>pill(r.id,r.name,tone(r),ids.includes(r.id))).join('')}
+/* ---------- reservas (cupos) ---------- */
+const RES_DEF={p1:80000,p2:150000,nequi:'3181324000',llave:'1092174364'};
+function resCfg(ev){ev.rc=Object.assign({},RES_DEF,ev.rc||{});return ev.rc}
+function resK(ev){const L=ev.res||[];const cap=nd(ev.cupos);const ppl=L.reduce((a,r)=>a+nd(r.ppl),0);const paidL=L.filter(r=>r.paid);const paid=paidL.reduce((a,r)=>a+nd(r.ppl),0);
+  const tot=L.reduce((a,r)=>a+nd(r.amount),0);const cob=paidL.reduce((a,r)=>a+nd(r.amount),0);return{cap,ppl,paid,pend:ppl-paid,left:cap?cap-ppl:null,tot,cob,porc:tot-cob,n:L.length}}
+function resChip(ev){if(!(ev.res||[]).length&&!nd(ev.cupos))return '';const k=resK(ev);return `<div class="rowx" style="gap:6px;margin-top:6px"><span class="chip" style="background:#173C32">🎟️ ${k.ppl}${k.cap?' / '+k.cap:''} personas</span>${k.cap?`<span class="chip ${k.left<=0?'bad':k.left<=4?'warn':'good'}">${k.left<=0?'Agotado':`Quedan ${k.left}`}</span>`:''}</div>`}
+function resPhone(t){let d=String(t||'').replace(/\D/g,'');if(d.length===10)d='57'+d;return d}
+function resMsg(ev,kind,r){const c=resCfg(ev);const f=ev.date?new Date(ev.date+'T12:00').toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'}):'';const fecha=f?f[0].toUpperCase()+f.slice(1):'';
+  const nom=r&&r.name?' '+r.name.split(' ')[0]:'';
+  if(kind==='info')return `¡Hola${nom}! 🍷 Qué bueno que te animes a la *Cata de Vinos* de Social, Mirador del Cielo y Juan Beltrán.
+
+🗓 ${fecha||'Jueves 26 de noviembre'}
+🕖 7:00 p.m.
+📍 Social
+
+*¿Qué vas a probar?*
+1. Sauvignon Blanc Reservado · Concha y Toro
+2. Frontera Rosé
+3. Maipo Classic Series Merlot
+4. Lambrusco Rosato · OgniGiorno
+
+*¿Qué trae?*
+🧀 Tabla de quesos para compartir
+🍕 Pizzeta de jamón serrano para compartir
+🍮 Panna cotta
+
+*Valor*
+1 persona · ${money(c.p1)}
+Pareja · ${money(c.p2)}
+
+*Para reservar* paga por Nequi:
+📲 Número: ${c.nequi}
+🔑 Llave: ${c.llave}
+
+Envíame el comprobante con tu nombre y si vienes solo/a o en pareja, y te confirmo el cupo. Los cupos son limitados 🥂`;
+  if(kind==='pago')return `¡Hola${nom}! 🍷 Tu cupo para la Cata de Vinos (${r&&nd(r.ppl)>1?'pareja':'1 persona'}) está apartado. Para confirmarlo, paga ${money(nd(r?.amount))} por Nequi:
+📲 Número: ${c.nequi}
+🔑 Llave: ${c.llave}
+Y envíame el comprobante por aquí 🙌`;
+  if(kind==='conf')return `¡Listo${nom}! ✅ Recibimos tu pago. Tu reserva para la *Cata de Vinos* está confirmada (${r&&nd(r.ppl)>1?'2 personas':'1 persona'}).
+🗓 ${fecha||'Jueves 26 de noviembre'} · 🕖 7:00 p.m. · 📍 Social
+¡Te esperamos! 🍷🥂`;
+  if(kind==='rec')return `¡Hola${nom}! 🍷 Te recordamos que hoy es la *Cata de Vinos*: 7:00 p.m. en Social. Llega unos minutos antes para recibirte con la primera copa. ¡Nos vemos! 🥂`;
+  return ''}
+function resHTML(ev){const c=resCfg(ev);const k=resK(ev);const L=ev.res||[];
+  const pc=k.cap?Math.min(k.paid/k.cap,1)*100:0,pp=k.cap?Math.min(k.pend/k.cap,1)*100:0;
+  return `<div class="card stack" style="background:#173C32;color:#F3EBDD">
+    <div class="rowx" style="align-items:flex-end;gap:18px"><div><small style="opacity:.75">Personas reservadas</small><div class="resbig">${k.ppl}${k.cap?`<span style="font-size:22px;opacity:.6"> / ${k.cap}</span>`:''}</div></div><span class="sp"></span>
+    <div style="text-align:right"><small style="opacity:.75">Cupos que quedan</small><div class="resbig" style="color:${k.cap&&k.left<=0?'#ff8a7a':'#F3EBDD'}">${k.cap?Math.max(k.left,0):'—'}</div></div></div>
+    ${k.cap?`<div class="resbar" style="background:rgba(243,235,221,.18)"><i style="width:${pc}%;background:#2ecc71"></i><i style="width:${pp}%;background:#E2B53E"></i></div>
+    <div class="rowx small" style="gap:14px"><span>🟢 Pagaron: <b>${k.paid}</b></span><span>🟡 Apartados sin pagar: <b>${k.pend}</b></span>${k.left<0?`<span style="color:#ff8a7a"><b>Sobrevendido por ${-k.left}</b></span>`:''}</div>`:'<span class="small" style="opacity:.85">Escribe abajo cuántos cupos hay en total para ver cuántos quedan.</span>'}
+  </div>
+  <div class="kpis"><div class="kpi"><small>Reservas</small><b class="num">${k.n}</b></div><div class="kpi hl"><small>Ya pagado</small><b class="num">${money(k.cob)}</b></div><div class="kpi"><small>Por cobrar</small><b class="num">${money(k.porc)}</b></div><div class="kpi"><small>Total reservado</small><b class="num">${money(k.tot)}</b></div></div>
+  <div class="card stack"><b>Nueva reserva</b><div class="grid2">
+    <div class="field span2"><label for="rsName">Nombre</label><input class="in" id="rsName" placeholder="Ej: Laura Gómez"></div>
+    <div class="field"><label for="rsTel">WhatsApp</label><input class="in num" id="rsTel" inputmode="tel" placeholder="300 000 0000"></div>
+    <div class="field"><span class="lab">Entrada</span><div class="seg" id="rsPpl"><button type="button" data-rp="1" aria-pressed="false">1 persona</button><button type="button" data-rp="2" aria-pressed="true">Pareja</button></div></div>
+    <div class="field span2"><label class="rowx" style="gap:8px;font-weight:700"><input type="checkbox" id="rsPaid"> Ya pagó (envió comprobante)</label></div></div>
+    <div class="rowx"><span class="sp"></span><button class="btn" id="rsAdd" style="background:#173C32;color:#F3EBDD">+ Agregar reserva</button></div></div>
+  <div class="card stack"><div class="rowx"><b>Lista de reservas</b><span class="sp"></span><button class="btn sm ghost" id="rsCopyList">Copiar lista</button></div>
+   ${L.length?L.map(r=>`<div class="resrow"><span style="flex:1;min-width:150px"><b>${esc(r.name||'Sin nombre')}</b><br><small class="muted">${nd(r.ppl)>1?'Pareja':'1 persona'} · ${money(nd(r.amount))}${r.tel?' · '+esc(r.tel):''}</small></span>
+     <button type="button" class="chip ${r.paid?'good':'warn'}" data-rpay="${r.id}" style="border:0;cursor:pointer">${r.paid?'✓ Pagó':'Falta pago'}</button>
+     ${r.tel?`<a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${resPhone(r.tel)}?text=${encodeURIComponent(resMsg(ev,r.paid?'conf':'pago',r))}">${r.paid?'WhatsApp: confirmar':'WhatsApp: datos de pago'}</a>`:''}
+     <button class="x" data-rdel="${r.id}" aria-label="Eliminar reserva">✕</button></div>`).join(''):'<span class="muted">Aún no hay reservas. Cada vez que alguien pague, agrégalo aquí.</span>'}</div>
+  <div class="card stack"><b>Mensajes para WhatsApp</b><span class="muted small">Cópialos y pégalos al responder. En WhatsApp Business puedes guardarlos como respuestas rápidas.</span>
+   <div class="rowx" style="gap:8px"><button class="btn sm" data-rcopy="info">Copiar: información y pago</button><button class="btn sm ghost" data-rcopy="conf">Copiar: confirmación</button><button class="btn sm ghost" data-rcopy="rec">Copiar: recordatorio del día</button></div></div>
+  <div class="card stack"><b>Configuración</b><div class="grid2">
+    <div class="field"><label for="rsCap">Cupos totales (personas)</label><input class="in num" data-afx="1" id="rsCap" inputmode="numeric" value="${nd(ev.cupos)||''}" placeholder="Ej: 30"></div>
+    <div class="field"><label for="rsP1">Precio 1 persona</label><input class="in num" id="rsP1" data-rc="p1" inputmode="numeric" value="${c.p1}"></div>
+    <div class="field"><label for="rsP2">Precio pareja</label><input class="in num" id="rsP2" data-rc="p2" inputmode="numeric" value="${c.p2}"></div>
+    <div class="field"><label for="rsNq">Nequi</label><input class="in num" data-afx="1" id="rsNq" data-rc="nequi" value="${esc(c.nequi)}"></div>
+    <div class="field"><label for="rsLl">Llave</label><input class="in num" data-afx="1" id="rsLl" data-rc="llave" value="${esc(c.llave)}"></div></div>
+    <span class="muted small">Las reservas actualizan solas los invitados y la venta del evento.</span></div>`}
+function resSync(ev){const k=resK(ev);if((ev.res||[]).length){ev.guests=k.ppl;ev.priceMode='total';ev.price=k.tot}}
+function resBind(B,ev,sv){const c=resCfg(ev);let ppl=2;const save2=()=>{resSync(ev);sv()};
+  B.querySelectorAll('[data-rp]').forEach(b=>b.onclick=()=>{ppl=+b.dataset.rp;B.querySelectorAll('[data-rp]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
+  $('#rsAdd').onclick=()=>{const name=$('#rsName').value.trim();if(!name){toast('Escribe el nombre');$('#rsName').focus();return}
+    ev.res=ev.res||[];ev.res.push({id:uid(),name,tel:$('#rsTel').value.trim(),ppl,amount:ppl>1?nd(c.p2):nd(c.p1),paid:$('#rsPaid').checked,at:today()});save2();blip(1200,.04);
+    const k=resK(ev);toast(k.cap?`Reserva guardada · quedan ${Math.max(k.left,0)} cupos`:'Reserva guardada');renderEvents()};
+  B.querySelectorAll('[data-rpay]').forEach(b=>b.onclick=()=>{const r=ev.res.find(x=>x.id===b.dataset.rpay);r.paid=!r.paid;save2();blip(r.paid?1300:700,.03);renderEvents()});
+  B.querySelectorAll('[data-rdel]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}ev.res=ev.res.filter(x=>x.id!==b.dataset.rdel);save2();renderEvents()});
+  const cap=$('#rsCap');cap.onchange=()=>{ev.cupos=nd(cap.value);sv();renderEvents()};
+  B.querySelectorAll('[data-rc]').forEach(i=>i.onchange=()=>{const f=i.dataset.rc;ev.rc[f]=(f==='p1'||f==='p2')?pm(i.value):i.value.trim();save2();renderEvents()});
+  const cp=async t=>{try{await navigator.clipboard.writeText(t);toast('Mensaje copiado')}catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Mensaje copiado')}catch(_){toast('No se pudo copiar')}ta.remove()}};
+  B.querySelectorAll('[data-rcopy]').forEach(b=>b.onclick=()=>cp(resMsg(ev,b.dataset.rcopy)));
+  $('#rsCopyList').onclick=()=>{const k=resK(ev);cp(`Reservas · ${ev.name}\n`+(ev.res||[]).map((r,i)=>`${i+1}. ${r.name} · ${nd(r.ppl)>1?'Pareja':'1 persona'} · ${r.paid?'Pagó':'Falta pago'}`).join('\n')+`\n\nPersonas: ${k.ppl}${k.cap?' / '+k.cap+' · quedan '+Math.max(k.left,0):''}`)}}
 const ST={cot:'Cotización',conf:'Confirmado',done:'Realizado',lost:'No se hizo'};
 function renderEvents(){
   const B=$('#evBody');$('#evExport').hidden=!curEv;{let fx=false;S.events.items.forEach(e=>{if(evFix(e))fx=true});if(fx)save('events',S.events)}
   if(!curEv){$('#evTitle').textContent='Eventos';
     const L=[...S.events.items].sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
     B.innerHTML=`<div class="stack wrapmax"><div class="rowx"><span class="muted">Eventos propios y colaboraciones, con sus costos, precio y reparto.</span><span class="sp"></span><button class="btn" id="evNew" style="background:#173C32;color:#F3EBDD">+ Nuevo evento</button></div>
-     ${L.length?`<div class="rlist">${L.map(ev=>{const c=evCalc(ev);return `<button class="rc" data-ev="${ev.id}"><span class="rowx"><span class="chip" style="background:${ev.type==='colab'?'var(--rookie)':'var(--fg)'};color:var(--bg)">${ev.type==='colab'?'Colaboración':'Propio'}</span><span class="muted small">${ST[ev.status]||''}</span></span><h3>${esc(ev.name)}</h3><span class="muted small">${esc(evWho(ev))} · ${fdate(ev.date)}${ev.guests?` · ${ev.guests} invitados`:''}</span><div class="k3"><div><small>Costo</small><b class="num">${money(c.total)}</b></div><div><small>Venta</small><b class="num">${money(c.sale)}</b></div><div><small>Margen</small><b>${mchip(c.margin,nd(ev.target)/100)}</b></div></div></button>`}).join('')}</div>`:'<div class="empty card">Aún no hay eventos. Crea el primero para cotizarlo.</div>'}</div>`;
+     ${L.length?`<div class="rlist">${L.map(ev=>{const c=evCalc(ev);return `<button class="rc" data-ev="${ev.id}"><span class="rowx"><span class="chip" style="background:${ev.type==='colab'?'var(--rookie)':'var(--fg)'};color:var(--bg)">${ev.type==='colab'?'Colaboración':'Propio'}</span><span class="muted small">${ST[ev.status]||''}</span></span><h3>${esc(ev.name)}</h3><span class="muted small">${esc(evWho(ev))} · ${fdate(ev.date)}${ev.guests?` · ${ev.guests} invitados`:''}</span>${resChip(ev)}<div class="k3"><div><small>Costo</small><b class="num">${money(c.total)}</b></div><div><small>Venta</small><b class="num">${money(c.sale)}</b></div><div><small>Margen</small><b>${mchip(c.margin,nd(ev.target)/100)}</b></div></div></button>`}).join('')}</div>`:'<div class="empty card">Aún no hay eventos. Crea el primero para cotizarlo.</div>'}</div>`;
     $('#evNew').onclick=()=>{const ev={id:uid(),name:'Nuevo evento',date:'',place:'',type:'own',status:'cot',guests:0,notes:'',lines:[],error:5,target:40,priceMode:'person',price:0,partners:[],buys:[]};S.events.items.push(ev);save('events',S.events);curEv=ev;evTab='datos';renderEvents()};
     B.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{curEv=S.events.items.find(e=>e.id===b.dataset.ev);evTab='datos';blip(800,.03);renderEvents()});return;
   }
   const ev=curEv,c=evCalc(ev);$('#evTitle').textContent=ev.name;const sv=()=>save('events',S.events);
-  const tabs=['datos','mp','recetas','costos','precio',...(ev.type==='colab'?['socios']:[]),'compras'];if(!tabs.includes(evTab))evTab='datos';
-  const TN={datos:'Datos',mp:'MP del evento',recetas:'Recetas',costos:'Costos',precio:'Precio y margen',socios:'Socios',compras:'Compras del evento'};
+  const tabs=['datos','reservas','mp','recetas','costos','precio',...(ev.type==='colab'?['socios']:[]),'compras'];if(!tabs.includes(evTab))evTab='datos';
+  const TN={datos:'Datos',reservas:'🎟️ Reservas',mp:'MP del evento',recetas:'Recetas',costos:'Costos',precio:'Precio y margen',socios:'Socios',compras:'Compras del evento'};
   let h=`<div class="stack wrapmax"><div class="rowx"><button class="btn sm ghost" id="evAll">← Todos los eventos</button></div><div class="tabs">${tabs.map(t=>`<button class="tab" data-et="${t}" aria-selected="${t===evTab}">${TN[t]}</button>`).join('')}</div>
    <div class="kpis"><div class="kpi"><small>Costo total</small><b class="num" data-o="total">${money(c.total)}</b></div><div class="kpi"><small>Costo por invitado</small><b class="num" data-o="perGuest">${money(c.perGuest)}</b></div><div class="kpi"><small>Venta</small><b class="num" data-o="sale">${money(c.sale)}</b></div><div class="kpi hl"><small>Utilidad · margen</small><b class="num" data-o="profit">${money(c.profit)}</b> <small data-o="margin">${pct(c.margin)}</small></div></div>`;
   if(evTab==='datos')h+=`<div class="card stack"><div class="grid2"><div class="field span2"><label for="eName">Nombre del evento</label><input class="in" id="eName" data-e="name" value="${esc(ev.name)}"></div>
@@ -1407,7 +1496,9 @@ function renderEvents(){
       return `<label class="task ${got?'done':''}" style="box-shadow:none;padding:6px 0"><input type="checkbox" data-buyev="${esc(l.id)}" ${got?'checked':''}><span class="t"><b>${esc(l.name)}</b><small class="muted">${det}</small></span></label>`}).join('')
       +`<div class="kpis"><div class="kpi hl"><small>Total a comprar</small><b class="num">${money(tb)}</b></div><div class="kpi"><small>Lo que usan las recetas</small><b class="num">${money(te)}</b></div><div class="kpi"><small>Margen + sobrante</small><b class="num">${money(tb-te)}</b></div></div>`
       :'<span class="muted">Agrega recetas o líneas de Insumos y Bebidas en Costos.</span>'}</div>`}
+  if(evTab==='reservas')h+=resHTML(ev);
   B.innerHTML=h+'</div>';
+  if(evTab==='reservas')resBind(B,ev,sv);
   $('#evAll').onclick=()=>{curEv=null;renderEvents()};
   B.querySelectorAll('[data-et]').forEach(b=>b.onclick=()=>{evTab=b.dataset.et;renderEvents()});
   const refresh=()=>evRefresh(B,ev);
@@ -1895,6 +1986,19 @@ async function importSocialExtra1(){const rid=typeof socRid==='function'?socRid(
     const items=[{ing:mp('Yogurt griego','g').id,qty:100},{ing:mp('Fresa','g').id,qty:30},{ing:mp('Arándanos','g').id,qty:20},...(sir?[{ing:sir.id,qty:2,type:'recipe'}]:[]),{ing:mp('Leche condensada','ml').id,qty:15},{ing:mp('Leche','ml').id,qty:75}];
     R.recipes.push({id:uid(),name:'Batido Morado',cat:cat('Batidos'),portions:1,price:0,error:null,target:null,items})}
   R.importX1=true;await save('r_'+rid,R,true)}
+async function makeEvCata(){if(S.events.cata2)return;
+  if(db&&db===window.__jbCloud){try{const d=(await db.doc('app/events').get()).data();if(d&&d.cata2)return}catch(e){return}}
+  const soc=S.meta.restaurants.find(r=>/social/i.test(r.name||''));const mir=S.meta.restaurants.find(r=>/mirador/i.test(r.name||''));
+  const C=S.events.items.filter(e=>/cata/i.test(e.name||''));
+  const NOTE='Social × Mirador del Cielo × Juan Beltrán. 7:00 p.m. Incluye tabla de quesos, pizzeta de jamón serrano y panna cotta. Vinos: Sauvignon Blanc Reservado CT, Frontera Rosé, Maipo Classic Series Merlot, Lambrusco Rosato OgniGiorno.';
+  if(C.length){const ev=C.find(e=>!e.cataAuto)||C[0];
+    S.events.items=S.events.items.filter(e=>e===ev||!(e.cataAuto&&!(e.res||[]).length));
+    ev.date='2026-11-26';if(!ev.place)ev.place='Social';if(ev.status==='cot')ev.status='conf';
+    if(!ev.notes)ev.notes=NOTE;else if(!/panna cotta/i.test(ev.notes))ev.notes+='\n'+NOTE;
+    if(!nd(ev.cupos))ev.cupos=nd(ev.guests)||0;ev.res=ev.res||[];ev.rc=Object.assign({},RES_DEF,ev.rc||{});
+    ev.jb=true;const rs=new Set(evR(ev));[soc?.id,mir?.id].forEach(x=>x&&rs.add(x));ev.rids=[...rs];delete ev.rid;}
+  else S.events.items.push({id:uid(),name:'Cata de vinos',date:'2026-11-26',place:'Social',type:'colab',status:'conf',guests:0,notes:NOTE,lines:[],error:5,target:40,priceMode:'total',price:0,partners:[],buys:[],jb:true,rids:[soc?.id,mir?.id].filter(Boolean),mp:[],cupos:0,res:[],rc:{...RES_DEF},cataAuto:true});
+  S.events.cata2=true;await save('events',S.events,true)}
 async function makeEvMangoFresa(){if(S.events.mf1||S.events.items.some(e=>/mango.?fresa/i.test(e.name||'')))return;
   if(db&&db===window.__jbCloud){try{const d=(await db.doc('app/events').get()).data();if(d&&(d.mf1||(d.items||[]).some(e=>/mango.?fresa/i.test(e.name||''))))return}catch(e){return}}
   const L=allMP();const soc=S.r[typeof socRid==='function'?socRid():'']||null;
@@ -1931,7 +2035,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa();await makeJ2()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa();await makeJ2();await makeEvCata()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
