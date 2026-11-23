@@ -368,7 +368,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.7</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.8.8</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -685,7 +685,7 @@ function j2AccView(R){const ev=S.events.items.find(e=>e.id===j2Ev);if(!ev){j2Ev=
     ${a.bl.map(l=>{const g=evGot(ev,l);const u=l.unit?' '+esc(l.unit):'';const det=l.rec&&l.packs?`${l.packs} × ${fq(l.pack)}${u}`:(l.qty?fq(l.qty)+u:'');return `<label class="task ${g?'done':''}" style="box-shadow:none;padding:6px 0"><input type="checkbox" data-j2buy="${esc(l.id)}" data-nm="${esc('rec:'+norm(l.name))}" ${g?'checked':''}><span class="t"><b>${esc(l.name)}</b><small class="muted">${det?det+' · ':''}${money(l.buy)}</small></span></label>`}).join('')}
     <span class="muted small">Lo que marques como comprado se descuenta solo de la plata disponible. Es la misma lista de la pestaña Compras del evento.</span>`:'<span class="muted small">Este evento aún no tiene lista de compras (se arma con las recetas y líneas de Insumos y Bebidas en Costos).</span>'}</div>
    <div class="card stack" style="gap:6px"><b>Reparto de la ganancia</b>${ps.map(p=>`<div class="rowx"><span>${esc(p.name||'Socio')} · ${fq(nd(p.pct))}%</span><span class="sp"></span><b class="num">${money(Math.max(0,a.gan)*nd(p.pct)/100)}</b></div>`).join('')}
-    <span class="muted small">${done?`✓ La parte de ${esc(me?.name||'Juan Beltran')} ya aparece en Controles, en lo que te debe J2.`:`La parte de ${esc(me?.name||'Juan Beltran')} pasará sola a Controles cuando el evento esté como realizado.`}</span></div>
+    ${j2PaidSt(ev,R)}<span class="muted small">${done?`✓ La parte de ${esc(me?.name||'Juan Beltran')} ya aparece en Controles, en lo que te debe J2.`:`La parte de ${esc(me?.name||'Juan Beltran')} pasará sola a Controles cuando el evento esté como realizado.`}</span></div>
    <form class="card stack" id="j2Form"><div class="seg" role="group">${Object.entries(J2T).map(([k,v])=>`<button type="button" data-j2ty="${k}" aria-pressed="${k===j2Ty}">${v}</button>`).join('')}</div>
     <div class="grid2">
      <div class="field"><label for="j2Date">Fecha</label><input class="in" type="date" id="j2Date" value="${today()}"></div>
@@ -1561,12 +1561,17 @@ function allocate(L){const ch=L.filter(m=>m.type!=='pago').map(m=>({m,left:nd(m.
   const take=(c,rest,parts)=>{const t=Math.min(rest,c.left);if(t>0.5){parts.push({m:c.m,amt:t,full:t>=nd(c.m.amount)-0.5});c.left-=t;return rest-t}return rest};
   for(const p of L.filter(m=>m.type==='pago')){let rest=nd(p.amount);const parts=[];
     if(Array.isArray(p.pays))for(const id of p.pays){const c=ch.find(x=>x.m.id===id);if(c&&rest>0.5)rest=take(c,rest,parts)}
-    for(const c of ch){if(rest<=0.5)break;if(c.left>0.5)rest=take(c,rest,parts)}
-    pays[p.id]={parts,extra:rest>0.5?rest:0};}
+    const pre=Array.isArray(p.pays)?p.pays.filter(id=>String(id).startsWith('j2ev_')&&!ch.some(x=>x.m.id===id)):[];
+    if(!pre.length)for(const c of ch){if(rest<=0.5)break;if(c.left>0.5)rest=take(c,rest,parts)}
+    pays[p.id]={parts,pre,extra:rest>0.5?rest:0};}
   const left={};for(const c of ch)left[c.m.id]=c.left;
   return{pays,open:ch.filter(c=>c.left>0.5),left}}
 const prodName=m=>(m.type==='turno'?'Turno':m.type==='ases'?'Asesoría':'Servicio')+(m.desc?` · ${m.desc}`:'');
 function groupLines(rows){const g=[];for(const r of rows){const k=r.name+'|'+r.unit;const f=g.find(x=>x.k===k);if(f){f.qty++;f.total+=r.unit}else g.push({k,name:r.name,unit:r.unit,qty:1,total:r.unit})}return g}
+function j2Pre(rid,R){const L=R.ledger||[];return S.events.items.filter(e=>evR(e).includes(rid)&&e.status!=='done'&&e.status!=='lost').map(ev=>({id:'j2ev_'+ev.id,ev,left:Math.round(j2Share(ev,R))})).filter(x=>x.left>0.5&&!L.some(m=>m.type==='pago'&&(m.pays||[]).includes(x.id)))}
+function j2PaidSt(ev,R){const L=R.ledger||[];const cid='j2ev_'+ev.id;const A=allocate(L);const lf=A.left[cid];const anti=L.some(m=>m.type==='pago'&&(m.pays||[]).includes(cid));
+  if(lf!=null){const tot=nd((L.find(m=>m.id===cid)||{}).amount);return lf<=0.5?'<span class="pill ok">✓ Ya te pagaron tu parte</span>':lf<tot-0.5?`<span class="pill part">Te abonaron ${money(tot-lf)} · falta ${money(lf)}</span>`:'<span class="pill due">Tu parte: pendiente de pago</span>'}
+  return anti?'<span class="pill ok">✓ Ya te pagaron tu parte (por adelantado)</span>':''}
 function renderCtrl(){
   syncJ2Ledger();const B=$('#ctBody');
   if(!ctR){$('#ctTitle').textContent='Controles';const tot=S.meta.restaurants.reduce((a,r)=>a+Math.max(0,balance(S.r[r.id])),0);
@@ -1576,8 +1581,8 @@ function renderCtrl(){
   const R=S.r[ctR],r=restById(ctR);$('#ctTitle').textContent='Controles · '+r.name;const L=R.ledger;
   const cobr=L.filter(m=>m.type!=='pago').reduce((a,m)=>a+nd(m.amount),0),pag=L.filter(m=>m.type==='pago').reduce((a,m)=>a+nd(m.amount),0);
   const list=L.map((m,i)=>({m,i})).reverse();
-  const isPay=ctTy==='pago';const AL=allocate(L);ctSel=ctSel.filter(id=>AL.left[id]>0.5);
-  const st=m=>{if(m.type==='pago'){const P=AL.pays[m.id];if(!P)return '';const names=P.parts.map(x=>(x.full?'':'Abono a ')+prodName(x.m)+(x.m.date?' '+fdr(x.m):''));return names.length||P.extra?`<div class="small muted">Paga: ${esc(names.join(' · '))}${P.extra?`${names.length?' · ':''}saldo a favor ${money(P.extra)}`:''}</div>`:''}
+  const isPay=ctTy==='pago';const AL=allocate(L);const PRE=isPay&&isJ2(r)?j2Pre(ctR,R):[];ctSel=ctSel.filter(id=>AL.left[id]>0.5||PRE.some(x=>x.id===id));
+  const st=m=>{if(m.type==='pago'){const P=AL.pays[m.id];if(!P)return '';const names=P.parts.map(x=>(x.full?'':'Abono a ')+prodName(x.m)+(x.m.date?' '+fdr(x.m):'')).concat((P.pre||[]).map(id=>{const e=S.events.items.find(x=>'j2ev_'+x.id===id);return 'Evento J2 · '+(e?e.name:'evento')+' (por realizar)'}));return names.length||P.extra?`<div class="small muted">Paga: ${esc(names.join(' · '))}${P.extra&&!(P.pre||[]).length?`${names.length?' · ':''}saldo a favor ${money(P.extra)}`:''}</div>`:''}
     const lf=AL.left[m.id]??0,tot=nd(m.amount);return lf<=0.5?'<span class="pill ok">Pagado ✓</span>':lf<tot-0.5?`<span class="pill part">Abonado ${money(tot-lf)} · falta ${money(lf)}</span>`:'<span class="pill due">Pendiente</span>'};
   B.innerHTML=`<div class="stack wrapmax"><div class="rowx"><button class="btn sm ghost" id="ctBack">← Restaurantes</button><span class="sp"></span><button class="btn sm" id="ctBill" style="background:#173C32;color:#F3EBDD">Cuenta de cobro</button></div>
    <div class="kpis"><div class="kpi"><small>Cobrado</small><b class="num">${money(cobr)}</b></div><div class="kpi"><small>Pagado</small><b class="num">${money(pag)}</b></div><div class="kpi hl"><small>Saldo pendiente</small><b class="num">${money(cobr-pag)}</b></div></div>
@@ -1587,7 +1592,7 @@ function renderCtrl(){
      <div class="field span2"><span class="lab">El valor es</span><div class="seg"><button type="button" data-per="dia" aria-pressed="${ctPer==='dia'}">Por día</button><button type="button" data-per="total" aria-pressed="${ctPer==='total'}">Total del turno</button></div></div>`:`<div class="field"><label for="ctDate">Fecha</label><input class="in" type="date" id="ctDate" value="${today()}"></div>`}
      <div class="field"><label for="ctAmt">${{turno:ctPer==='dia'?'Valor por día':'Valor total del turno',ases:'Valor de la asesoría',cargo:'Valor',pago:'Valor pagado'}[ctTy]}</label><input class="in num" id="ctAmt" inputmode="numeric" placeholder="$0"></div>
      <div class="field span2"><label for="ctDesc">Detalle (opcional)</label><input class="in" id="ctDesc" placeholder="${{turno:'Ej: cocina, 8 h',ases:'Ej: carta de cócteles',cargo:'Ej: transporte',pago:'Ej: abono quincena'}[ctTy]}"></div>
-     ${isPay?`<div class="field span2"><span class="lab">¿Qué te están pagando?</span>${AL.open.length?`<div class="paylist">${AL.open.map(c=>{const m=c.m,part=c.left<nd(m.amount)-0.5;return `<button type="button" class="payit" data-sel="${m.id}" data-left="${Math.round(c.left)}" aria-pressed="${ctSel.includes(m.id)}"><span class="ck"></span><span class="pn">${esc(prodName(m))}<small>${m.date?fdr(m):'Sin fecha'}${part?` · abonado ${money(nd(m.amount)-c.left)}`:''}</small></span><b class="num">${money(c.left)}</b></button>`}).join('')}</div><div class="rowx" style="gap:6px"><button type="button" class="btn sm ghost" id="ctAll">Seleccionar todo</button><button type="button" class="btn sm ghost" id="ctNone">Quitar</button><span class="sp"></span><small class="muted" id="ctSelInfo"></small></div>`:'<small class="muted">No hay cobros pendientes. Si registras el pago queda como saldo a favor.</small>'}</div>
+     ${isPay?`<div class="field span2"><span class="lab">¿Qué te están pagando?</span>${AL.open.length||PRE.length?`<div class="paylist">${AL.open.map(c=>{const m=c.m,part=c.left<nd(m.amount)-0.5;return `<button type="button" class="payit" data-sel="${m.id}" data-left="${Math.round(c.left)}" aria-pressed="${ctSel.includes(m.id)}"><span class="ck"></span><span class="pn">${esc(prodName(m))}<small>${m.date?fdr(m):'Sin fecha'}${part?` · abonado ${money(nd(m.amount)-c.left)}`:''}</small></span><b class="num">${money(c.left)}</b></button>`}).join('')}${PRE.map(x=>`<button type="button" class="payit" data-sel="${x.id}" data-left="${x.left}" aria-pressed="${ctSel.includes(x.id)}"><span class="ck"></span><span class="pn">Evento J2 · ${esc(x.ev.name||'Evento')} · tu parte<small>${x.ev.date?fdate(x.ev.date):'Sin fecha'} · por realizar</small></span><b class="num">${money(x.left)}</b></button>`).join('')}</div><div class="rowx" style="gap:6px"><button type="button" class="btn sm ghost" id="ctAll">Seleccionar todo</button><button type="button" class="btn sm ghost" id="ctNone">Quitar</button><span class="sp"></span><small class="muted" id="ctSelInfo"></small></div>`:'<small class="muted">No hay cobros pendientes. Si registras el pago queda como saldo a favor.</small>'}</div>
      <div class="field span2"><span class="lab">Cómo pagó</span><div class="seg">${Object.entries(PM).map(([k,v])=>`<button type="button" data-pm="${k}" aria-pressed="${k===ctPay}">${v}</button>`).join('')}</div></div>
      <div class="field span2"><label for="ctFile">Comprobante (opcional)</label><input class="in" type="file" id="ctFile" accept="image/*">${ctImg?'<small class="muted">Imagen lista ✓</small>':''}</div>`:''}
     </div>
@@ -1599,7 +1604,7 @@ function renderCtrl(){
   B.querySelectorAll('[data-ty]').forEach(b=>b.onclick=()=>{ctTy=b.dataset.ty;ctImg=null;ctSel=[];renderCtrl()});
   const selSync=()=>{let sum=0;B.querySelectorAll('[data-sel]').forEach(x=>{const on=ctSel.includes(x.dataset.sel);x.setAttribute('aria-pressed',on);if(on)sum+=+x.dataset.left});const inf=$('#ctSelInfo');if(inf)inf.textContent=ctSel.length?`${ctSel.length} seleccionado${ctSel.length>1?'s':''} · ${money(sum)}`:'';const a=$('#ctAmt');if(a&&ctSel.length)a.value=Math.round(sum).toLocaleString('es-CO')};
   B.querySelectorAll('[data-sel]').forEach(b=>b.onclick=()=>{const id=b.dataset.sel;ctSel=ctSel.includes(id)?ctSel.filter(x=>x!==id):[...ctSel,id];blip(900,.02);selSync()});
-  if($('#ctAll'))$('#ctAll').onclick=()=>{ctSel=AL.open.map(c=>c.m.id);selSync()};
+  if($('#ctAll'))$('#ctAll').onclick=()=>{ctSel=AL.open.map(c=>c.m.id).concat(PRE.map(x=>x.id));selSync()};
   if($('#ctNone'))$('#ctNone').onclick=()=>{ctSel=[];selSync();$('#ctAmt').value=''};
   selSync();
   const dSync=()=>{const o=$('#ctDays');if(!o)return;const a=$('#ctDate').value,b=$('#ctDate2').value;if(b&&b<a){o.textContent='⚠ "Hasta" es antes de "Desde"';return}const n=nDays(a,b||a),v=pm($('#ctAmt').value)||0;o.textContent=`${n} día${n>1?'s':''}`+(v?` · total ${money(ctPer==='dia'?v*n:v)}`+(ctPer==='total'&&n>1?` (${money(v/n)}/día)`:''):'')};
@@ -1613,7 +1618,7 @@ function renderCtrl(){
     const d1=ctTy==='ases'?'':($('#ctDate')?.value||today());let d2=ctTy==='turno'?($('#ctDate2')?.value||''):'';if(d2&&d2<d1)return toast('"Hasta" no puede ser antes de "Desde"');if(d2===d1)d2='';
     const qty=d2?nDays(d1,d2):1;if(qty>62)return toast('Máximo 62 días por turno');const unit=ctTy==='turno'&&ctPer==='total'?amt/qty:amt;
     const m={id:uid(),type:ctTy,date:d1,amount:Math.round(unit*qty),unit,qty,desc:$('#ctDesc').value.trim(),at:Date.now()};if(d2)m.date2=d2;
-    if(ctTy==='pago'){m.method=ctPay;if(ctImg)m.img=storeImg(ctImg);if(ctSel.length)m.pays=AL.open.map(c=>c.m.id).filter(id=>ctSel.includes(id))}
+    if(ctTy==='pago'){m.method=ctPay;if(ctImg)m.img=storeImg(ctImg);if(ctSel.length)m.pays=AL.open.map(c=>c.m.id).concat(PRE.map(x=>x.id)).filter(id=>ctSel.includes(id))}
     L.push(m);ctImg=null;ctSel=[];saveR(ctR);blip(ctTy==='pago'?1300:1000);toast(ctTy==='pago'?'Pago registrado':'Registrado');renderCtrl()};
   B.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}const m=L.find(x=>x.id===b.dataset.lm);if(m?.img)delDoc('img_'+m.img);R.ledger=L.filter(x=>x.id!==b.dataset.lm);saveR(ctR);renderCtrl()});
   B.querySelectorAll('[data-vimg]').forEach(b=>b.onclick=async()=>{const src=await loadImg(b.dataset.vimg);const P=$('#genPane');P.innerHTML=`<h2>Comprobante</h2>${src?`<img src="${src}" alt="Comprobante" style="width:100%;border-radius:10px">`:'<span class="muted">No se encontró la imagen</span>'}<button class="btn ghost" id="vClose">Cerrar</button>`;$('#vClose').onclick=()=>$('#genSheet').hidden=true;$('#genSheet').hidden=false});
@@ -1635,7 +1640,7 @@ async function receipt(R,r,payId,sel){
   if(payId){pay=L.find(m=>m.id===payId);const pi=L.filter(m=>m.type==='pago').findIndex(m=>m.id===payId);num=String(pi+1).padStart(4,'0');
     const parts=pays[payId]?.parts||[];const rows=[];
     for(const p of parts){const m=p.m;const q=m.qty||1,u=m.unit||nd(m.amount)/q;if(p.amt>=nd(m.amount)-0.5){for(let k=0;k<q;k++)rows.push({name:prodName(m)+(m.date?` (${fdr(m)})`:''),unit:u})}else rows.push({name:'Abono a '+prodName(m)+(m.date?` (${fdr(m)})`:''),unit:p.amt})}
-    lines=groupLines(rows);if(pays[payId]?.extra>0.5)lines.push({name:'Saldo a favor',qty:1,unit:pays[payId].extra,total:pays[payId].extra});
+    lines=groupLines(rows);if(pays[payId]?.extra>0.5){const pr=(pays[payId].pre||[]).map(id=>S.events.items.find(x=>'j2ev_'+x.id===id)).filter(Boolean);lines.push({name:pr.length?'Evento J2 · '+pr.map(e=>e.name).join(', ')+' (anticipo)':'Saldo a favor',qty:1,unit:pays[payId].extra,total:pays[payId].extra})}
     title='RECIBO DE PAGO';tot=nd(pay.amount);
     const idx=L.indexOf(pay);const before=L.slice(0,idx+1);const due=before.reduce((a,m)=>a+(m.type==='pago'?-nd(m.amount):nd(m.amount)),0);
     extraRows=[['Método de pago',PM[pay.method]||'—'],['Saldo pendiente',money(Math.max(0,due))]];
