@@ -371,7 +371,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.9.0</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.9.1</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -382,6 +382,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <button class="tab" role="tab" data-tab="j2ev" id="tabJ2" hidden>🎉 Eventos</button>
     <button class="tab" role="tab" data-tab="recipes">🍽 Recetas</button>
     <button class="tab" role="tab" data-tab="mp">🧺 Materia prima</button>
+    <button class="tab" role="tab" data-tab="inv">📦 Inventario</button>
     <button class="tab" role="tab" data-tab="global">⚙️ Ajustes</button>
     <button class="tab" role="tab" data-tab="export">📊 Excel</button>
   </div></div>
@@ -648,7 +649,7 @@ function renderRest(){
   $('#rName').textContent=curR.name;const lg=$('#rLogo');lg.style.background=tone(curR);lg.innerHTML=rFace(curR);
   $('#tabColab').hidden=!curR.colab;if(curTab==='colab'&&!curR.colab)curTab='recipes';$('#tabJ2').hidden=!isJ2(curR);if(curTab==='j2ev'&&!isJ2(curR))curTab='recipes';
   $$('#rTabs .tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.tab===curTab));
-  const B=$('#rBody');B.innerHTML={recipes:recipesView,mp:mpView,global:globalView,export:exportView,colab:colabView,j2ev:j2View}[curTab](R);bindRest(R);if(curTab==='colab')bindColab(R);if(curTab==='j2ev')bindJ2(R);
+  const B=$('#rBody');B.innerHTML={recipes:recipesView,mp:mpView,inv:invView,global:globalView,export:exportView,colab:colabView,j2ev:j2View}[curTab](R);bindRest(R);if(curTab==='colab')bindColab(R);if(curTab==='inv')bindInv(R);if(curTab==='j2ev')bindJ2(R);
 }
 const isJ2=r=>!!r&&(r.j2||r.id==='j2'||/^j2$/i.test((r.name||'').trim()));
 function j2Socios(R){return R.socios||(R.socios=[{id:'s1',name:'Juan Beltran',pct:50},{id:'s2',name:'Juanse Quiñones',pct:50}])}
@@ -1424,6 +1425,61 @@ function resBind(B,ev,sv){const c=resCfg(ev);let ppl=2;const save2=()=>{resSync(
   const cp=async t=>{try{await navigator.clipboard.writeText(t);toast('Mensaje copiado')}catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Mensaje copiado')}catch(_){toast('No se pudo copiar')}ta.remove()}};
   B.querySelectorAll('[data-rcopy]').forEach(b=>b.onclick=()=>cp(resMsg(ev,b.dataset.rcopy)));
   $('#rsCopyList').onclick=()=>{const k=resK(ev);cp(`Reservas · ${ev.name}\n`+(ev.res||[]).map((r,i)=>`${i+1}. ${r.name} · ${nd(r.ppl)>1?'Pareja':'1 persona'} · ${r.paid?'Pagó':'Falta pago'}`).join('\n')+`\n\nPersonas: ${k.ppl}${k.cap?' / '+k.cap+' · quedan '+Math.max(k.left,0):''}`)}}
+
+/* ---------- inventario ---------- */
+let invQ='';
+const invU=u=>u==='und'?'und':u==='g'?'g':u==='ml'?'ml':(u||'');
+function invPres(i){const pk=nd(i.pack)||1;return i.unit==='und'?'por unidad':`${fq(pk)} ${invU(i.unit)}`}
+const invNum=v=>String(+(+v).toFixed(3)).replace('.',',');
+function invHay(i){const pk=i.unit==='und'?1:(nd(i.pack)||1);return nd(i.stock)/pk}
+function invView(R){
+  const L=R.ingredients.filter(i=>i.inv).sort((a,b)=>(a.name||'').localeCompare(b.name||'','es'));
+  const val=L.reduce((a,i)=>a+nd(i.stock)*unitCost(i),0),np=L.filter(i=>!(nd(i.price)>0)).length;
+  const last=L.map(i=>i.invAt||'').sort().pop();
+  const opts=R.ingredients.filter(i=>!i.inv&&i.name).sort((a,b)=>a.name.localeCompare(b.name,'es'));
+  return `<div class="stack">
+  <div class="rowx"><h2 class="sec">Inventario</h2><span class="sp"></span><button class="btn" data-act="invNew">+ Nuevo</button></div>
+  <span class="muted small">Escribe cuántas presentaciones hay (botellas, bolsas, unidades). Se acepta decimal: 0,75 = tres cuartos de botella. La app lo pasa sola a ml, g o unidades.</span>
+  <div class="kpis"><div class="kpi"><small>Productos</small><b class="num">${L.length}</b></div><div class="kpi hl"><small>Valor del inventario</small><b class="num">${money(val)}</b></div><div class="kpi"><small>Sin precio</small><b class="num">${np}</b></div><div class="kpi"><small>Último conteo</small><b class="num">${last?fdate(last):'—'}</b></div></div>
+  ${opts.length?`<div class="rowx"><select class="in" id="invAdd" style="flex:1;min-width:180px"><option value="">+ Agregar materia prima que ya existe…</option>${opts.map(i=>`<option value="${i.id}">${esc(i.name)} (${esc(i.unit||'')})</option>`).join('')}</select></div>`:''}
+  <div class="rowx"><input class="in" id="invQ" type="search" placeholder="🔍 Buscar…" value="${esc(invQ)}" style="flex:1;min-width:180px;border-radius:999px"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Producto</th><th>Se mide en</th><th>Presentación</th><th>Hay (presentaciones)</th><th>Total</th><th>Valor</th><th></th></tr></thead><tbody>
+  ${L.map(i=>`<tr data-inv="${i.id}"><td class="w-name"><input class="in" data-iv="name" value="${esc(i.name)}"></td>
+   <td><select class="in" data-iv="unit" style="width:84px">${['ml','g','und'].map(u=>`<option ${i.unit===u?'selected':''}>${u}</option>`).join('')}</select></td>
+   <td>${i.unit==='und'?'<span class="muted small">—</span>':`<input class="in num" data-iv="pack" inputmode="decimal" value="${invNum(nd(i.pack))}" style="width:90px">`}</td>
+   <td><input class="in num" data-iv="hay" inputmode="decimal" value="${invNum(invHay(i))}" style="width:90px"></td>
+   <td class="num"><b>${fq(nd(i.stock))}</b> ${invU(i.unit)}</td>
+   <td class="num">${nd(i.price)>0?money(nd(i.stock)*unitCost(i)):'<span class="muted small">sin precio</span>'}</td>
+   <td><button class="x" data-ivdel="${i.id}" aria-label="Quitar del inventario">✕</button></td></tr>`).join('')}
+  </tbody></table></div>${L.length?'':'<div class="empty">Aún no hay nada en el inventario.</div>'}
+  <span class="muted small">El precio de compra se edita en 🧺 Materia prima (precio de la presentación).</span></div>`}
+function bindInv(R){const B=$('#rBody');const sv=()=>saveR(curR.id);
+  const q=$('#invQ');if(q){const f=()=>{const t=norm(q.value);B.querySelectorAll('tr[data-inv]').forEach(tr=>{const i=R.ingredients.find(x=>x.id===tr.dataset.inv);tr.hidden=!!t&&!norm(i?.name||'').includes(t)})};q.oninput=()=>{invQ=q.value;f()};f()}
+  const ad=$('#invAdd');if(ad)ad.onchange=()=>{const i=R.ingredients.find(x=>x.id===ad.value);if(!i)return;i.inv=true;i.stock=nd(i.stock);sv();renderRest()};
+  const nw=B.querySelector('[data-act="invNew"]');if(nw)nw.onclick=()=>{const id=uid();R.ingredients.push({id,name:'',unit:'ml',pack:750,price:0,yield:100,inv:true,stock:0,invAt:today()});sv();renderRest();setTimeout(()=>{const el=B.querySelector(`tr[data-inv="${id}"] [data-iv="name"]`);if(el){el.scrollIntoView({block:'center'});el.focus()}},60)};
+  B.querySelectorAll('tr[data-inv]').forEach(tr=>{const i=R.ingredients.find(x=>x.id===tr.dataset.inv);if(!i)return;
+    tr.querySelectorAll('[data-iv]').forEach(el=>el.onchange=()=>{const f=el.dataset.iv;const hay=invHay(i);
+      if(f==='name')i.name=el.value.trim();
+      if(f==='unit'){i.unit=el.value;if(i.unit==='und'){i.pack=1;i.stock=hay}else{if(!(nd(i.pack)>1))i.pack=i.unit==='ml'?750:1000;i.stock=hay*nd(i.pack)}}
+      if(f==='pack'){const pk=nd(el.value);if(pk>0){i.pack=pk;i.stock=hay*pk}}
+      if(f==='hay'){i.stock=nd(el.value)*(i.unit==='und'?1:(nd(i.pack)||1));i.invAt=today()}
+      sv();renderRest()})});
+  B.querySelectorAll('[data-ivdel]').forEach(b=>b.onclick=()=>{if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='?';return}const i=R.ingredients.find(x=>x.id===b.dataset.ivdel);if(i){i.inv=false}sv();renderRest()})}
+async function seedSocialInv1(){const rid=socRid();if(!rid)return;const R=S.r[rid];if(!R||R.inv1)return;
+  if(db&&db===window.__jbCloud){try{const d=(await db.doc('app/r_'+rid).get()).data();if(!d||d.inv1)return}catch(e){return}}
+  const find=(...ns)=>R.ingredients.find(x=>ns.some(n=>norm(x.name)===norm(n)));
+  const D=[ // [nombre, alias existentes, unidad, presentación, hay]
+   ["Buchanan's Deluxe",[],'ml',750,5.75],["Buchanan's Master",[],'ml',750,0.75],["Black Label",[],'ml',1000,1.25],["Double Black",[],'ml',750,0.75],
+   ["Red Label",[],'ml',1750,0.6],["Old Parr",[],'ml',750,2.75],["Aguardiente Antioqueño Tapa Azul",[],'und',1,3],["Aguardiente Amarillo",[],'und',1,3],
+   ["Ron Viejo de Caldas Tradicional",[],'und',1,3],["Ron Viejo de Caldas Carta de Oro",[],'und',1,1],
+   ["Ron oscuro",[],'ml',1750,0.75],["Ron blanco",[],'ml',1750,0.25],["Licor de coco",["Ron de coco"],'ml',750,1.75],["Vodka",[],'ml',700,2],
+   ["José Cuervo",[],'ml',750,1],["Tequila blanco",["Tequila"],'ml',750,0.75],["Bosque de Indias",[],'ml',750,1.75],
+   ["Licor de café",[],'ml',750,2.1],["Baileys",[],'ml',750,0.5],["Smirnoff tamarindo",[],'ml',750,4.1]];
+  for(const [n,al,u,pk,hay] of D){let i=find(n,...al);
+    if(!i){i={id:uid(),name:n,unit:u,pack:pk,price:0,yield:100};R.ingredients.push(i)}
+    else{if(norm(i.name)!==norm(n))i.name=n;if(i.unit!==u){i.unit=u}i.pack=pk}
+    i.inv=true;i.stock=Math.round(hay*(u==='und'?1:pk)*100)/100;i.invAt='2026-11-24'}
+  R.inv1=true;await save('r_'+rid,R,true)}
 const ST={cot:'Cotización',conf:'Confirmado',done:'Realizado',lost:'No se hizo'};
 function renderEvents(){
   const B=$('#evBody');$('#evExport').hidden=!curEv;{let fx=false;S.events.items.forEach(e=>{if(evFix(e))fx=true});if(fx)save('events',S.events)}
@@ -2039,7 +2095,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa();await makeJ2();await makeEvCata();await fixCataHora()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa();await makeJ2();await makeEvCata();await fixCataHora();await seedSocialInv1()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
