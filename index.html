@@ -371,7 +371,7 @@ td .in{padding:6px 8px;border-radius:8px}
     <div class="row gut" id="shelf"></div>
   </div>
   <nav class="dock gut" aria-label="Menú" id="dock"></nav>
-  <div class="foot"><span>Juan Beltran · v0.8.9</span><span><span class="kbd">A</span>Abrir</span></div>
+  <div class="foot"><span>Juan Beltran · v0.9.0</span><span><span class="kbd">A</span>Abrir</span></div>
 </section>
 
 <!-- RESTAURANTE -->
@@ -1350,7 +1350,7 @@ function resMsg(ev,kind,r){const c=resCfg(ev);const f=ev.date?new Date(ev.date+'
   if(kind==='info')return `¡Hola${nom}! 🍷 Qué bueno que te animes a la *Cata de Vinos* de Social, Mirador del Cielo y Juan Beltrán.
 
 🗓 ${fecha||'Jueves 26 de noviembre'}
-🕖 7:00 p.m.
+🕖 7:30 p.m.
 📍 Social
 
 *¿Qué vas a probar?*
@@ -1378,9 +1378,9 @@ Envíame el comprobante con tu nombre y si vienes solo/a o en pareja, y te confi
 🔑 Llave: ${c.llave}
 Y envíame el comprobante por aquí 🙌`;
   if(kind==='conf')return `¡Listo${nom}! ✅ Recibimos tu pago. Tu reserva para la *Cata de Vinos* está confirmada (${r&&nd(r.ppl)>1?'2 personas':'1 persona'}).
-🗓 ${fecha||'Jueves 26 de noviembre'} · 🕖 7:00 p.m. · 📍 Social
+🗓 ${fecha||'Jueves 26 de noviembre'} · 🕖 7:30 p.m. · 📍 Social
 ¡Te esperamos! 🍷🥂`;
-  if(kind==='rec')return `¡Hola${nom}! 🍷 Te recordamos que hoy es la *Cata de Vinos*: 7:00 p.m. en Social. Llega unos minutos antes para recibirte con la primera copa. ¡Nos vemos! 🥂`;
+  if(kind==='rec')return `¡Hola${nom}! 🍷 Te recordamos que hoy es la *Cata de Vinos*: 7:30 p.m. en Social. Llega unos minutos antes para recibirte con la primera copa. ¡Nos vemos! 🥂`;
   return ''}
 function resHTML(ev){const c=resCfg(ev);const k=resK(ev);const L=ev.res||[];
   const pc=k.cap?Math.min(k.paid/k.cap,1)*100:0,pp=k.cap?Math.min(k.pend/k.cap,1)*100:0;
@@ -1986,11 +1986,15 @@ async function importSocialExtra1(){const rid=typeof socRid==='function'?socRid(
     const items=[{ing:mp('Yogurt griego','g').id,qty:100},{ing:mp('Fresa','g').id,qty:30},{ing:mp('Arándanos','g').id,qty:20},...(sir?[{ing:sir.id,qty:2,type:'recipe'}]:[]),{ing:mp('Leche condensada','ml').id,qty:15},{ing:mp('Leche','ml').id,qty:75}];
     R.recipes.push({id:uid(),name:'Batido Morado',cat:cat('Batidos'),portions:1,price:0,error:null,target:null,items})}
   R.importX1=true;await save('r_'+rid,R,true)}
+async function fixCataHora(){if(S.events.cata3)return;
+  if(db&&db===window.__jbCloud){try{const d=(await db.doc('app/events').get()).data();if(d&&d.cata3)return}catch(e){return}}
+  S.events.items.forEach(e=>{if(/cata/i.test(e.name||'')&&e.notes)e.notes=e.notes.replace(/7:00 p\.m\./g,'7:30 p.m.')});
+  S.events.cata3=true;await save('events',S.events,true)}
 async function makeEvCata(){if(S.events.cata2)return;
   if(db&&db===window.__jbCloud){try{const d=(await db.doc('app/events').get()).data();if(d&&d.cata2)return}catch(e){return}}
   const soc=S.meta.restaurants.find(r=>/social/i.test(r.name||''));const mir=S.meta.restaurants.find(r=>/mirador/i.test(r.name||''));
   const C=S.events.items.filter(e=>/cata/i.test(e.name||''));
-  const NOTE='Social × Mirador del Cielo × Juan Beltrán. 7:00 p.m. Incluye tabla de quesos, pizzeta de jamón serrano y panna cotta. Vinos: Sauvignon Blanc Reservado CT, Frontera Rosé, Maipo Classic Series Merlot, Lambrusco Rosato OgniGiorno.';
+  const NOTE='Social × Mirador del Cielo × Juan Beltrán. 7:30 p.m. Incluye tabla de quesos, pizzeta de jamón serrano y panna cotta. Vinos: Sauvignon Blanc Reservado CT, Frontera Rosé, Maipo Classic Series Merlot, Lambrusco Rosato OgniGiorno.';
   if(C.length){const ev=C.find(e=>!e.cataAuto)||C[0];
     S.events.items=S.events.items.filter(e=>e===ev||!(e.cataAuto&&!(e.res||[]).length));
     ev.date='2026-11-26';if(!ev.place)ev.place='Social';if(ev.status==='cot')ev.status='conf';
@@ -2035,7 +2039,7 @@ async function boot(){
     if(t?.items)S.tasks=t;if(ev?.items)S.events=ev;if(bo?.items)S.boards=bo;if(idd?.items)S.ideas=idd;
   }catch(e){console.error(e)}
   bar(65);applyTheme();
-  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa();await makeJ2();await makeEvCata()}catch(e){console.error(e)}
+  try{await loadAllR();await migrateMiradorData();await makeDesayuno();await makeColabSM();await fixColab45();await clearColabMP();await importSocialApk();await importSocialExtra1();await makeEvMangoFresa();await makeJ2();await makeEvCata();await fixCataHora()}catch(e){console.error(e)}
   bar(90);
   setTimeout(enter,Math.max(0,700-(Date.now()-t0)));
 }
